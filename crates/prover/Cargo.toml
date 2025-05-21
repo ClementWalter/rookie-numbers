@@ -1,0 +1,10 @@
+[package]
+name = "prover"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+stwo-prover.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+air.workspace = true
