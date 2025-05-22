@@ -5,5 +5,5 @@ Last year, [Shahar Papini tweet](https://x.com/PapiniShahar/status/1831402791400
 ## How to run
 
 ```bash
-RUSTFLAGS="-C target-cpu=native" cargo test -r
+RUSTFLAGS="-C target-cpu=native" cargo test -r -- test_prove_rookie
 ```

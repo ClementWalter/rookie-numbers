@@ -9,3 +9,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 air.workspace = true
 num-traits.workspace = true
+
+[dev-dependencies]
+divan = "0.1.21"
+
+[[bench]]
+name = "example"
+harness = false

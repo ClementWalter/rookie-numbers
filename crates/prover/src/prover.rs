@@ -3,14 +3,14 @@ use air::preprocessed::PreProcessedTrace;
 use air::Proof;
 use std::time::Instant;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
-use stwo_prover::core::air::ComponentProver;
+use stwo_prover::core::air::{Component as ComponentVerifier, ComponentProver};
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::backend::BackendForChannel;
 use stwo_prover::core::channel::MerkleChannel;
 use stwo_prover::core::fields::qm31::SecureField;
-use stwo_prover::core::pcs::{CommitmentSchemeProver, PcsConfig};
+use stwo_prover::core::pcs::{CommitmentSchemeProver, CommitmentSchemeVerifier, PcsConfig};
 use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
-use stwo_prover::core::prover::{prove, ProvingError};
+use stwo_prover::core::prover::{prove, verify, ProvingError, VerificationError};
 use tracing::{info, span, Level};
 
 pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, ProvingError>
@@ -69,4 +69,47 @@ where
     info!("Proving speed: {:.2} MHz", proving_mhz);
 
     Ok(Proof { claim, stark_proof })
+}
+
+pub fn verify_rookie<MC: MerkleChannel>(proof: Proof<MC::H>) -> Result<(), VerificationError> {
+    let _span = span!(Level::INFO, "verify_rookie").entered();
+
+    // Setup protocol.
+    let channel = &mut MC::C::default();
+
+    let pcs_config = PcsConfig::default();
+    pcs_config.mix_into(channel);
+
+    let commitment_scheme_verifier = &mut CommitmentSchemeVerifier::<MC>::new(pcs_config);
+
+    // Preprocessed trace.
+    info!("preprocessed trace");
+    let preprocessed_trace = PreProcessedTrace::default();
+    commitment_scheme_verifier.commit(
+        proof.stark_proof.commitments[0],
+        &proof.claim.log_sizes()[0],
+        channel,
+    );
+
+    // Execution traces
+    info!("execution trace");
+    proof.claim.mix_into(channel);
+    commitment_scheme_verifier.commit(
+        proof.stark_proof.commitments[1],
+        &proof.claim.log_sizes()[1],
+        channel,
+    );
+
+    // Verify stark.
+    info!("verify stark");
+    let mut tree_span_provider =
+        TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
+    let eval = Eval { claim: proof.claim };
+    let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
+    verify(
+        &[&component as &dyn ComponentVerifier],
+        channel,
+        commitment_scheme_verifier,
+        proof.stark_proof,
+    )
 }
