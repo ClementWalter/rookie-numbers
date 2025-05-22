@@ -10,9 +10,7 @@ use stwo_prover::core::fields::qm31::SecureField;
 use stwo_prover::core::pcs::{ CommitmentSchemeProver, PcsConfig };
 use stwo_prover::core::poly::circle::{ CanonicCoset, PolyOps };
 use stwo_prover::core::prover::{ prove, ProvingError };
-use tracing::{ span, Level };
-
-pub(crate) const LOG_MAX_ROWS: u32 = 26;
+use tracing::{ span, Level, info };
 
 pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, ProvingError>
     where SimdBackend: BackendForChannel<MC>
@@ -25,9 +23,10 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
     let pcs_config = PcsConfig::default();
     pcs_config.mix_into(channel);
 
+    info!("twiddles");
     let twiddles = SimdBackend::precompute_twiddles(
         CanonicCoset::new(
-            LOG_MAX_ROWS + pcs_config.fri_config.log_blowup_factor + 2
+            log_size + pcs_config.fri_config.log_blowup_factor + 2
         ).circle_domain().half_coset
     );
     let mut commitment_scheme = CommitmentSchemeProver::<SimdBackend, MC>::new(
@@ -37,6 +36,7 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
 
     // Preprocessed traces
     let span = span!(Level::INFO, "Preprocessed trace").entered();
+    info!("preprocessed trace");
     let preprocessed_trace = PreProcessedTrace::default();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(preprocessed_trace.gen_trace());
@@ -45,6 +45,7 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
 
     // Execution traces
     let span = span!(Level::INFO, "Execution trace").entered();
+    info!("execution trace");
     let claim = Claim::new(log_size);
     claim.mix_into(channel);
 
@@ -55,6 +56,7 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
 
     // Prove stark.
     let span = span!(Level::INFO, "Prove STARKs").entered();
+    info!("prove stark");
     let mut tree_span_provider = TraceLocationAllocator::new_with_preproccessed_columns(
         &preprocessed_trace.ids()
     );
