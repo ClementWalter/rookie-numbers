@@ -11,6 +11,7 @@ use stwo_prover::core::pcs::{ CommitmentSchemeProver, PcsConfig };
 use stwo_prover::core::poly::circle::{ CanonicCoset, PolyOps };
 use stwo_prover::core::prover::{ prove, ProvingError };
 use tracing::{ span, Level, info };
+use std::{ time::Instant };
 
 pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, ProvingError>
     where SimdBackend: BackendForChannel<MC>
@@ -35,16 +36,13 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
     );
 
     // Preprocessed traces
-    let span = span!(Level::INFO, "Preprocessed trace").entered();
     info!("preprocessed trace");
     let preprocessed_trace = PreProcessedTrace::default();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(preprocessed_trace.gen_trace());
     tree_builder.commit(channel);
-    span.exit();
 
     // Execution traces
-    let span = span!(Level::INFO, "Execution trace").entered();
     info!("execution trace");
     let claim = Claim::new(log_size);
     claim.mix_into(channel);
@@ -52,22 +50,25 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(claim.write_trace().to_evals());
     tree_builder.commit(channel);
-    span.exit();
 
     // Prove stark.
-    let span = span!(Level::INFO, "Prove STARKs").entered();
     info!("prove stark");
     let mut tree_span_provider = TraceLocationAllocator::new_with_preproccessed_columns(
         &preprocessed_trace.ids()
     );
     let eval = Eval { claim };
     let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
+    let proving_start = Instant::now();
     let stark_proof = prove::<SimdBackend, _>(
         &[&component as &dyn ComponentProver<SimdBackend>],
         channel,
         commitment_scheme
     )?;
-    span.exit();
+    let proving_duration = proving_start.elapsed();
+    let proving_mhz = ((1 << log_size) as f64) / proving_duration.as_secs_f64() / 1_000_000.0;
+    info!("Trace size: {:?}", 1 << log_size);
+    info!("Proving time: {:?}", proving_duration);
+    info!("Proving speed: {:.2} MHz", proving_mhz);
 
     Ok(Proof {
         claim,

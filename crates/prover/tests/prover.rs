@@ -8,6 +8,6 @@ fn test_prove_rookie() {
         .with_max_level(tracing::Level::INFO) // Set the log level
         .init();
 
-    let result = prove_rookie::<Blake2sMerkleChannel>((100u32).ilog2());
+    let result = prove_rookie::<Blake2sMerkleChannel>((1_000_000u32).ilog2());
     assert!(result.is_ok());
 }
