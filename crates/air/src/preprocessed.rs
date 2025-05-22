@@ -2,10 +2,9 @@
 //! the proof.
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::fields::m31::{BaseField};
-use stwo_prover::core::poly::circle::{CircleEvaluation};
+use stwo_prover::core::fields::m31::BaseField;
+use stwo_prover::core::poly::circle::CircleEvaluation;
 use stwo_prover::core::poly::BitReversedOrder;
-
 
 pub trait PreProcessedColumn {
     fn log_size(&self) -> u32;
@@ -17,9 +16,7 @@ pub struct PreProcessedTrace {
     columns: Vec<Box<dyn PreProcessedColumn>>,
 }
 impl PreProcessedTrace {
-    /// Generates a canonical preprocessed trace. Used in proving Generic Cairo code & Starknet
-    /// blocks.
-    pub fn new( columns: Vec<Box<dyn PreProcessedColumn>>) -> Self {
+    pub fn new(columns: Vec<Box<dyn PreProcessedColumn>>) -> Self {
         Self { columns }
     }
 

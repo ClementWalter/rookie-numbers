@@ -1,5 +1,4 @@
 use prover::prover::prove_rookie;
-use stwo_prover::core::pcs::{ PcsConfig };
 use stwo_prover::core::vcs::blake2_merkle::Blake2sMerkleChannel;
 
 #[test]
@@ -9,7 +8,6 @@ fn test_prove_rookie() {
     // The .ok() silences the unused result warning.
     let _ = tracing_subscriber::fmt().try_init();
 
-    let pcs_config = PcsConfig::default();
-    let result = prove_rookie::<Blake2sMerkleChannel>(pcs_config);
+    let result = prove_rookie::<Blake2sMerkleChannel>((1_000u32).ilog2());
     assert!(result.is_ok());
 }

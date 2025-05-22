@@ -501,6 +501,7 @@ name = "prover"
 version = "0.0.1"
 dependencies = [
  "air",
+ "num-traits",
  "stwo-prover",
  "tracing",
  "tracing-subscriber",
