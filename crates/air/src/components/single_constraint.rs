@@ -12,7 +12,7 @@ use stwo_prover::{
     },
 };
 
-pub const N_TRACE_COLUMNS: usize = 3;
+pub const N_TRACE_COLUMNS: usize = 3 * 500;
 
 #[derive(Copy, Clone)]
 pub struct Claim {
@@ -42,9 +42,11 @@ impl Claim {
         let M31_0 = PackedM31::broadcast(M31::from(0));
         let M31_1 = PackedM31::broadcast(M31::from(1));
         trace.par_iter_mut().for_each(|mut row| {
-            *row[0] = M31_0;
-            *row[1] = M31_1;
-            *row[2] = M31_1;
+            for i in (0..N_TRACE_COLUMNS).step_by(3) {
+                *row[i] = M31_0;
+                *row[i + 1] = M31_1;
+                *row[i + 2] = M31_1;
+            }
         });
         trace
     }
@@ -64,11 +66,13 @@ impl FrameworkEval for Eval {
     }
 
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
-        let col0 = eval.next_trace_mask();
-        let col1 = eval.next_trace_mask();
-        let col2 = eval.next_trace_mask();
+        for _ in 0..(N_TRACE_COLUMNS / 3) {
+            let col0 = eval.next_trace_mask();
+            let col1 = eval.next_trace_mask();
+            let col2 = eval.next_trace_mask();
 
-        eval.add_constraint(col0.clone() + col1.clone() - col2.clone());
+            eval.add_constraint(col0.clone() + col1.clone() - col2.clone());
+        }
 
         eval
     }
