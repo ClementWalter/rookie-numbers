@@ -1,20 +1,21 @@
+use air::components::{Claim, Component, Eval};
 use air::preprocessed::PreProcessedTrace;
-use air::components::{ Claim, Component, Eval };
 use air::Proof;
+use std::time::Instant;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
 use stwo_prover::core::air::ComponentProver;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::backend::BackendForChannel;
-use stwo_prover::core::channel::{ MerkleChannel };
+use stwo_prover::core::channel::MerkleChannel;
 use stwo_prover::core::fields::qm31::SecureField;
-use stwo_prover::core::pcs::{ CommitmentSchemeProver, PcsConfig };
-use stwo_prover::core::poly::circle::{ CanonicCoset, PolyOps };
-use stwo_prover::core::prover::{ prove, ProvingError };
-use tracing::{ span, Level, info };
-use std::{ time::Instant };
+use stwo_prover::core::pcs::{CommitmentSchemeProver, PcsConfig};
+use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
+use stwo_prover::core::prover::{prove, ProvingError};
+use tracing::{info, span, Level};
 
 pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, ProvingError>
-    where SimdBackend: BackendForChannel<MC>
+where
+    SimdBackend: BackendForChannel<MC>,
 {
     let _span = span!(Level::INFO, "prove_rookie").entered();
 
@@ -26,14 +27,12 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
 
     info!("twiddles");
     let twiddles = SimdBackend::precompute_twiddles(
-        CanonicCoset::new(
-            log_size + pcs_config.fri_config.log_blowup_factor + 2
-        ).circle_domain().half_coset
+        CanonicCoset::new(log_size + pcs_config.fri_config.log_blowup_factor + 2)
+            .circle_domain()
+            .half_coset,
     );
-    let mut commitment_scheme = CommitmentSchemeProver::<SimdBackend, MC>::new(
-        pcs_config,
-        &twiddles
-    );
+    let mut commitment_scheme =
+        CommitmentSchemeProver::<SimdBackend, MC>::new(pcs_config, &twiddles);
 
     // Preprocessed traces
     info!("preprocessed trace");
@@ -53,16 +52,15 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
 
     // Prove stark.
     info!("prove stark");
-    let mut tree_span_provider = TraceLocationAllocator::new_with_preproccessed_columns(
-        &preprocessed_trace.ids()
-    );
+    let mut tree_span_provider =
+        TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
     let eval = Eval { claim };
     let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
     let proving_start = Instant::now();
     let stark_proof = prove::<SimdBackend, _>(
         &[&component as &dyn ComponentProver<SimdBackend>],
         channel,
-        commitment_scheme
+        commitment_scheme,
     )?;
     let proving_duration = proving_start.elapsed();
     let proving_mhz = ((1 << log_size) as f64) / proving_duration.as_secs_f64() / 1_000_000.0;
@@ -70,8 +68,5 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
     info!("Proving time: {:?}", proving_duration);
     info!("Proving speed: {:.2} MHz", proving_mhz);
 
-    Ok(Proof {
-        claim,
-        stark_proof,
-    })
+    Ok(Proof { claim, stark_proof })
 }
