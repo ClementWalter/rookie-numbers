@@ -1,8 +1,5 @@
 [workspace]
-members = [
-    "crates/prover",
-    "crates/air",
-]
+members = ["crates/prover", "crates/air"]
 resolver = "2"
 
 [workspace.package]
@@ -11,8 +8,8 @@ edition = "2021"
 
 [workspace.dependencies]
 stwo-prover = { git = "https://github.com/starkware-libs/stwo", rev = "8b5436d", features = [
-    "parallel",
-], default-features = false }
+  "parallel",
+] }
 stwo-air-utils-derive = { git = "https://github.com/starkware-libs/stwo", rev = "8b5436d" }
 stwo-air-utils = { git = "https://github.com/starkware-libs/stwo", rev = "8b5436d" }
 rayon = "1.10.0"

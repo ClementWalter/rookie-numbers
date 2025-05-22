@@ -1,4 +1,3 @@
-use num_traits::identities::Zero;
 use air::preprocessed::PreProcessedTrace;
 use air::components::{ Claim, Component, Eval };
 use air::Proof;
@@ -54,20 +53,13 @@ pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, Pr
     tree_builder.commit(channel);
     span.exit();
 
-    // Interaction traces
-    let span = span!(Level::INFO, "Interaction trace").entered();
-    let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_evals(vec![]);
-    tree_builder.commit(channel);
-    span.exit();
-
     // Prove stark.
     let span = span!(Level::INFO, "Prove STARKs").entered();
     let mut tree_span_provider = TraceLocationAllocator::new_with_preproccessed_columns(
         &preprocessed_trace.ids()
     );
     let eval = Eval { claim };
-    let component = Component::new(&mut tree_span_provider, eval, SecureField::zero());
+    let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
     let stark_proof = prove::<SimdBackend, _>(
         &[&component as &dyn ComponentProver<SimdBackend>],
         channel,

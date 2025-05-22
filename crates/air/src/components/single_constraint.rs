@@ -1,12 +1,12 @@
 use rayon::iter::ParallelIterator;
 pub use stwo_air_utils::trace::component_trace::ComponentTrace;
-pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+pub use stwo_air_utils_derive::{ IterMut, ParIterMut, Uninitialized };
 pub use stwo_prover::core::backend::simd::m31::PackedM31;
 use stwo_prover::{
-    constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval},
+    constraint_framework::{ EvalAtRow, FrameworkComponent, FrameworkEval },
     core::{
-        backend::{simd::SimdBackend, BackendForChannel},
-        channel::{Channel, MerkleChannel},
+        backend::{ simd::SimdBackend, BackendForChannel },
+        channel::{ Channel, MerkleChannel },
         fields::m31::M31,
         pcs::TreeVec,
     },
@@ -35,8 +35,7 @@ impl Claim {
 
     #[allow(non_snake_case)]
     pub fn write_trace<MC: MerkleChannel>(&self) -> ComponentTrace<N_TRACE_COLUMNS>
-    where
-        SimdBackend: BackendForChannel<MC>,
+        where SimdBackend: BackendForChannel<MC>
     {
         let mut trace = unsafe { ComponentTrace::<N_TRACE_COLUMNS>::uninitialized(self.log_size) };
         let M31_0 = PackedM31::broadcast(M31::from(0));
