@@ -13,7 +13,9 @@ use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
 use stwo_prover::core::prover::{prove, verify, ProvingError, VerificationError};
 use tracing::{info, span, Level};
 
-pub fn prove_rookie<MC: MerkleChannel>(log_size: u32) -> Result<Proof<MC::H>, ProvingError>
+pub fn prove_rookie<MC: MerkleChannel, const N: usize>(
+    log_size: u32,
+) -> Result<Proof<N, MC::H>, ProvingError>
 where
     SimdBackend: BackendForChannel<MC>,
 {
@@ -71,7 +73,12 @@ where
     Ok(Proof { claim, stark_proof })
 }
 
-pub fn verify_rookie<MC: MerkleChannel>(proof: Proof<MC::H>) -> Result<(), VerificationError> {
+pub fn verify_rookie<MC: MerkleChannel, const N: usize>(
+    proof: Proof<N, MC::H>,
+) -> Result<(), VerificationError>
+where
+    SimdBackend: BackendForChannel<MC>,
+{
     let _span = span!(Level::INFO, "verify_rookie").entered();
 
     // Setup protocol.

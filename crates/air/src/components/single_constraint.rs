@@ -12,20 +12,18 @@ use stwo_prover::{
     },
 };
 
-pub const N_TRACE_COLUMNS: usize = 3 * 500;
-
 #[derive(Copy, Clone)]
-pub struct Claim {
+pub struct Claim<const N: usize> {
     pub log_size: u32,
 }
 
-impl Claim {
+impl<const N: usize> Claim<N> {
     pub fn new(log_size: u32) -> Self {
         Self { log_size }
     }
 
     pub fn log_sizes(&self) -> TreeVec<Vec<u32>> {
-        let trace_log_sizes = vec![self.log_size; N_TRACE_COLUMNS];
+        let trace_log_sizes = vec![self.log_size; N];
         TreeVec::new(vec![vec![], trace_log_sizes, vec![]])
     }
 
@@ -34,15 +32,15 @@ impl Claim {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_trace<MC: MerkleChannel>(&self) -> ComponentTrace<N_TRACE_COLUMNS>
+    pub fn write_trace<MC: MerkleChannel>(&self) -> ComponentTrace<N>
     where
         SimdBackend: BackendForChannel<MC>,
     {
-        let mut trace = unsafe { ComponentTrace::<N_TRACE_COLUMNS>::uninitialized(self.log_size) };
+        let mut trace = unsafe { ComponentTrace::<N>::uninitialized(self.log_size) };
         let M31_0 = PackedM31::broadcast(M31::from(0));
         let M31_1 = PackedM31::broadcast(M31::from(1));
         trace.par_iter_mut().for_each(|mut row| {
-            for i in (0..N_TRACE_COLUMNS).step_by(3) {
+            for i in (0..N).step_by(3) {
                 *row[i] = M31_0;
                 *row[i + 1] = M31_1;
                 *row[i + 2] = M31_1;
@@ -52,11 +50,11 @@ impl Claim {
     }
 }
 
-pub struct Eval {
-    pub claim: Claim,
+pub struct Eval<const N: usize> {
+    pub claim: Claim<N>,
 }
 
-impl FrameworkEval for Eval {
+impl<const N: usize> FrameworkEval for Eval<N> {
     fn log_size(&self) -> u32 {
         self.claim.log_size
     }
@@ -66,7 +64,7 @@ impl FrameworkEval for Eval {
     }
 
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
-        for _ in 0..(N_TRACE_COLUMNS / 3) {
+        for _ in (0..N).step_by(3) {
             let col0 = eval.next_trace_mask();
             let col1 = eval.next_trace_mask();
             let col2 = eval.next_trace_mask();
@@ -78,4 +76,4 @@ impl FrameworkEval for Eval {
     }
 }
 
-pub type Component = FrameworkComponent<Eval>;
+pub type Component<const N: usize> = FrameworkComponent<Eval<N>>;
