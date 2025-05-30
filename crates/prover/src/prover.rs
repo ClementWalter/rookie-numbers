@@ -1,13 +1,12 @@
-use air::components::{Claim, Component, Eval};
+use air::components::{Claim, Components};
 use air::preprocessed::PreProcessedTrace;
 use air::Proof;
 use std::time::Instant;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
-use stwo_prover::core::air::{Component as ComponentVerifier, ComponentProver};
+
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::backend::BackendForChannel;
 use stwo_prover::core::channel::MerkleChannel;
-use stwo_prover::core::fields::qm31::SecureField;
 use stwo_prover::core::pcs::{CommitmentSchemeProver, CommitmentSchemeVerifier, PcsConfig};
 use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
 use stwo_prover::core::prover::{prove, verify, ProvingError, VerificationError};
@@ -49,21 +48,16 @@ where
     claim.mix_into(channel);
 
     let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_evals(claim.write_trace().to_evals());
+    tree_builder.extend_evals(claim.write_trace());
     tree_builder.commit(channel);
 
     // Prove stark.
     info!("prove stark");
     let mut tree_span_provider =
         TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
-    let eval = Eval { claim };
-    let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
+    let components = Components::new(&mut tree_span_provider, &claim);
     let proving_start = Instant::now();
-    let stark_proof = prove::<SimdBackend, _>(
-        &[&component as &dyn ComponentProver<SimdBackend>],
-        channel,
-        commitment_scheme,
-    )?;
+    let stark_proof = prove::<SimdBackend, _>(&components.provers(), channel, commitment_scheme)?;
     let proving_duration = proving_start.elapsed();
     let proving_mhz = ((1 << log_size) as f64) / proving_duration.as_secs_f64() / 1_000_000.0;
     info!("Trace size: {:?}", 1 << log_size);
@@ -111,10 +105,9 @@ where
     info!("verify stark");
     let mut tree_span_provider =
         TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
-    let eval = Eval { claim: proof.claim };
-    let component = Component::new(&mut tree_span_provider, eval, SecureField::default());
+    let components = Components::new(&mut tree_span_provider, &proof.claim);
     verify(
-        &[&component as &dyn ComponentVerifier],
+        &components.verifiers(),
         channel,
         commitment_scheme_verifier,
         proof.stark_proof,
