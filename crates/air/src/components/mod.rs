@@ -5,8 +5,8 @@ pub mod single_constraint_with_relation;
 use num_traits::Zero;
 pub use stwo_air_utils::trace::component_trace::ComponentTrace;
 pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+use stwo_prover::core::air::Component as ComponentVerifier;
 pub use stwo_prover::core::backend::simd::m31::PackedM31;
-use stwo_prover::core::{air::Component as ComponentVerifier, fields::qm31::QM31};
 use stwo_prover::{
     constraint_framework::TraceLocationAllocator,
     core::{
@@ -24,7 +24,7 @@ use crate::relations;
 pub struct Claim<const N: usize> {
     pub single_constraint: single_constraint::Claim<N>,
     pub multiple_constraints: multiple_constraints::Claim<N>,
-    pub single_constraint_with_relation: single_constraint_with_relation::Claim<N>,
+    pub single_constraint_with_relation: single_constraint_with_relation::Claim,
 }
 
 pub struct LookupData {
@@ -35,7 +35,7 @@ pub struct Relations {
     pub memory: relations::Memory,
 }
 
-pub struct InteractionClaim {
+pub struct InteractionClaim<const N: usize> {
     pub single_constraint_with_relation: single_constraint_with_relation::InteractionClaim,
 }
 
@@ -77,13 +77,11 @@ impl<const N: usize> Claim<N> {
         let (single_constraint_with_relation_trace, lookup_data) =
             self.single_constraint_with_relation.write_trace();
         (
-            [
-                single_trace.to_evals(),
-                multiple_trace.to_evals(),
-                single_constraint_with_relation_trace.to_evals(),
-            ]
-            .into_iter()
-            .flatten(),
+            single_trace
+                .to_evals()
+                .into_iter()
+                .chain(multiple_trace.to_evals())
+                .chain(single_constraint_with_relation_trace.to_evals()),
             LookupData {
                 single_constraint_with_relation: lookup_data,
             },
@@ -91,13 +89,13 @@ impl<const N: usize> Claim<N> {
     }
 }
 
-impl InteractionClaim {
+impl<const N: usize> InteractionClaim<N> {
     pub fn write_interaction_trace(
         relations: &Relations,
         lookup_data: &LookupData,
     ) -> (
         impl IntoIterator<Item = CircleEvaluation<SimdBackend, M31, BitReversedOrder>>,
-        InteractionClaim,
+        InteractionClaim<N>,
     ) {
         let (
             single_constraint_with_relation_trace,
@@ -118,7 +116,7 @@ impl InteractionClaim {
     }
 
     pub fn claimed_sum(&self) -> SecureField {
-        let mut sum = QM31::zero();
+        let mut sum = SecureField::zero();
         sum += self.single_constraint_with_relation.claimed_sum;
         sum
     }
@@ -146,7 +144,7 @@ impl<const N: usize> Components<N> {
     pub fn new(
         location_allocator: &mut TraceLocationAllocator,
         claim: &Claim<N>,
-        interaction_claim: &InteractionClaim,
+        interaction_claim: &InteractionClaim<N>,
         relations: &Relations,
     ) -> Self {
         Self {

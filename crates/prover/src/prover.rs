@@ -50,9 +50,9 @@ where
     // Execution traces
     info!("execution trace");
     let claim = Claim::new(log_size);
-    let (trace, lookup_data) = claim.write_trace();
     claim.mix_into(channel);
 
+    let (trace, lookup_data) = claim.write_trace();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(trace);
     tree_builder.commit(channel);

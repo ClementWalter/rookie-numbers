@@ -1,15 +1,18 @@
+use crate::relations;
 use num_traits::identities::One;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-pub use stwo_air_utils::trace::component_trace::ComponentTrace;
-pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+use stwo_air_utils::trace::component_trace::ComponentTrace;
+use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::Relation;
-pub use stwo_prover::core::backend::simd::m31::PackedM31;
+use stwo_prover::constraint_framework::RelationEntry;
+use stwo_prover::core::backend::simd::m31::PackedM31;
 use stwo_prover::core::backend::simd::qm31::PackedQM31;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::fields::qm31::SecureField;
+use stwo_prover::core::fields::secure_column::SECURE_EXTENSION_DEGREE;
 use stwo_prover::core::poly::circle::CircleEvaluation;
 use stwo_prover::core::poly::BitReversedOrder;
 use stwo_prover::{
@@ -22,10 +25,8 @@ use stwo_prover::{
     },
 };
 
-use crate::relations;
-
 #[derive(Copy, Clone)]
-pub struct Claim<const N: usize> {
+pub struct Claim {
     pub log_size: u32,
 }
 
@@ -41,14 +42,15 @@ pub struct LookupData {
     memory: Vec<[PackedM31; 2]>,
 }
 
-impl<const N: usize> Claim<N> {
+impl Claim {
     pub fn new(log_size: u32) -> Self {
         Self { log_size }
     }
 
     pub fn log_sizes(&self) -> TreeVec<Vec<u32>> {
-        let trace_log_sizes = vec![self.log_size; N];
-        TreeVec::new(vec![vec![], trace_log_sizes, vec![]])
+        let trace_log_sizes = vec![self.log_size; 3];
+        let interaction_log_sizes = vec![self.log_size; SECURE_EXTENSION_DEGREE];
+        TreeVec::new(vec![vec![], trace_log_sizes, interaction_log_sizes])
     }
 
     pub fn mix_into(&self, channel: &mut impl Channel) {
@@ -56,27 +58,26 @@ impl<const N: usize> Claim<N> {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_trace<MC: MerkleChannel>(&self) -> (ComponentTrace<N>, LookupData)
+    pub fn write_trace<MC: MerkleChannel>(&self) -> (ComponentTrace<3>, LookupData)
     where
         SimdBackend: BackendForChannel<MC>,
     {
         let (mut trace, mut lookup_data) = unsafe {
             (
-                ComponentTrace::<N>::uninitialized(self.log_size),
+                ComponentTrace::<3>::uninitialized(self.log_size),
                 LookupData::uninitialized(self.log_size),
             )
         };
 
         let M31_0 = PackedM31::broadcast(M31::from(0));
         let M31_1 = PackedM31::broadcast(M31::from(1));
+
         (trace.par_iter_mut(), lookup_data.par_iter_mut())
             .into_par_iter()
             .for_each(|(mut row, lookup_data)| {
-                for i in (0..N).step_by(3) {
-                    *row[i] = M31_0;
-                    *row[i + 1] = M31_1;
-                    *row[i + 2] = M31_1;
-                }
+                *row[0] = M31_0;
+                *row[1] = M31_1;
+                *row[2] = M31_1;
                 *lookup_data.memory = [M31_0, M31_1];
             });
         (trace, lookup_data)
@@ -106,17 +107,18 @@ impl InteractionClaim {
                 writer.write_frac(PackedQM31::one(), denom);
             });
         col.finalize_col();
+
         let (trace, claimed_sum) = interaction_trace.finalize_last();
         (trace, InteractionClaim { claimed_sum })
     }
 }
 
-pub struct Eval<const N: usize> {
-    pub claim: Claim<N>,
+pub struct Eval {
+    pub claim: Claim,
     pub memory: relations::Memory,
 }
 
-impl<const N: usize> FrameworkEval for Eval<N> {
+impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
         self.claim.log_size
     }
@@ -126,16 +128,22 @@ impl<const N: usize> FrameworkEval for Eval<N> {
     }
 
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
-        for _ in (0..N).step_by(3) {
-            let col0 = eval.next_trace_mask();
-            let col1 = eval.next_trace_mask();
-            let col2 = eval.next_trace_mask();
+        let col0 = eval.next_trace_mask();
+        let col1 = eval.next_trace_mask();
+        let col2 = eval.next_trace_mask();
 
-            eval.add_constraint(col0.clone() + col1.clone() - col2.clone());
-        }
+        eval.add_constraint(col0.clone() + col1.clone() - col2.clone());
+
+        eval.add_to_relation(RelationEntry::new(
+            &self.memory,
+            E::EF::one(),
+            &[col0, col1],
+        ));
+
+        eval.finalize_logup();
 
         eval
     }
 }
 
-pub type Component<const N: usize> = FrameworkComponent<Eval<N>>;
+pub type Component<const N: usize> = FrameworkComponent<Eval>;
