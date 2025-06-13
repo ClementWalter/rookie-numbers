@@ -7,13 +7,13 @@ fn test_prove_rookie() {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    let result = prove_rookie::<Blake2sMerkleChannel, 3>((2u32.pow(15)).ilog2());
+    let result = prove_rookie::<Blake2sMerkleChannel, 3>(13);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_verify_rookie() {
-    let proof = prove_rookie::<Blake2sMerkleChannel, 3>((2u32.pow(15)).ilog2()).unwrap();
+    let proof = prove_rookie::<Blake2sMerkleChannel, 3>(13).unwrap();
     let result = verify_rookie::<Blake2sMerkleChannel, 3>(proof);
     assert!(result.is_ok());
 }

@@ -1,3 +1,4 @@
+pub mod memory;
 pub mod multiple_constraints;
 pub mod single_constraint;
 pub mod single_constraint_with_relation;
@@ -25,18 +26,21 @@ pub struct Claim<const N: usize> {
     pub single_constraint: single_constraint::Claim<N>,
     pub multiple_constraints: multiple_constraints::Claim<N>,
     pub single_constraint_with_relation: single_constraint_with_relation::Claim,
-}
-
-pub struct LookupData {
-    pub single_constraint_with_relation: single_constraint_with_relation::LookupData,
+    pub memory: memory::Claim,
 }
 
 pub struct Relations {
     pub memory: relations::Memory,
 }
 
+pub struct LookupData {
+    pub single_constraint_with_relation: single_constraint_with_relation::LookupData,
+    pub memory: memory::LookupData,
+}
+
 pub struct InteractionClaim<const N: usize> {
     pub single_constraint_with_relation: single_constraint_with_relation::InteractionClaim,
+    pub memory: memory::InteractionClaim,
 }
 
 impl<const N: usize> Claim<N> {
@@ -45,6 +49,7 @@ impl<const N: usize> Claim<N> {
             single_constraint: single_constraint::Claim::new(log_size),
             multiple_constraints: multiple_constraints::Claim::new(log_size),
             single_constraint_with_relation: single_constraint_with_relation::Claim::new(log_size),
+            memory: memory::Claim::default(),
         }
     }
 
@@ -53,6 +58,7 @@ impl<const N: usize> Claim<N> {
             self.single_constraint.log_sizes(),
             self.multiple_constraints.log_sizes(),
             self.single_constraint_with_relation.log_sizes(),
+            self.memory.log_sizes(),
         ];
         TreeVec::concat_cols(trees.into_iter())
     }
@@ -61,10 +67,11 @@ impl<const N: usize> Claim<N> {
         self.single_constraint.mix_into(channel);
         self.multiple_constraints.mix_into(channel);
         self.single_constraint_with_relation.mix_into(channel);
+        self.memory.mix_into(channel);
     }
 
     pub fn write_trace<MC: MerkleChannel>(
-        &self,
+        &mut self,
     ) -> (
         impl IntoIterator<Item = CircleEvaluation<SimdBackend, M31, BitReversedOrder>>,
         LookupData,
@@ -72,20 +79,32 @@ impl<const N: usize> Claim<N> {
     where
         SimdBackend: BackendForChannel<MC>,
     {
+        // Write opcode components
         let single_trace = self.single_constraint.write_trace();
         let multiple_trace = self.multiple_constraints.write_trace();
-        let (single_constraint_with_relation_trace, lookup_data) =
+        let (single_constraint_with_relation_trace, single_constraint_with_relation_lookup_data) =
             self.single_constraint_with_relation.write_trace();
-        (
-            single_trace
-                .to_evals()
-                .into_iter()
-                .chain(multiple_trace.to_evals())
-                .chain(single_constraint_with_relation_trace.to_evals()),
-            LookupData {
-                single_constraint_with_relation: lookup_data,
-            },
-        )
+
+        // Write data components based on opcode components lookup data
+        let (memory_trace, memory_lookup_data) = self
+            .memory
+            .write_trace(&single_constraint_with_relation_lookup_data.memory);
+
+        // Gather all lookup data
+        let lookup_data = LookupData {
+            single_constraint_with_relation: single_constraint_with_relation_lookup_data,
+            memory: memory_lookup_data,
+        };
+
+        // Combine all traces
+        let trace = single_trace
+            .to_evals()
+            .into_iter()
+            .chain(multiple_trace.to_evals())
+            .chain(single_constraint_with_relation_trace.to_evals())
+            .chain(memory_trace);
+
+        (trace, lookup_data)
     }
 }
 
@@ -99,18 +118,25 @@ impl<const N: usize> InteractionClaim<N> {
     ) {
         let (
             single_constraint_with_relation_trace,
-            single_constraint_with_relation_trace_claimed_sum,
+            single_constraint_with_relation_interaction_claim,
         ) = single_constraint_with_relation::InteractionClaim::write_interaction_trace(
             &relations.memory,
             &lookup_data.single_constraint_with_relation,
         );
 
+        let (memory_trace, memory_interaction_claim) =
+            memory::InteractionClaim::write_interaction_trace(
+                &relations.memory,
+                &lookup_data.memory,
+            );
+
         (
-            [single_constraint_with_relation_trace]
+            single_constraint_with_relation_trace
                 .into_iter()
-                .flatten(),
+                .chain(memory_trace),
             InteractionClaim {
-                single_constraint_with_relation: single_constraint_with_relation_trace_claimed_sum,
+                single_constraint_with_relation: single_constraint_with_relation_interaction_claim,
+                memory: memory_interaction_claim,
             },
         )
     }
@@ -118,11 +144,13 @@ impl<const N: usize> InteractionClaim<N> {
     pub fn claimed_sum(&self) -> SecureField {
         let mut sum = SecureField::zero();
         sum += self.single_constraint_with_relation.claimed_sum;
+        sum += self.memory.claimed_sum;
         sum
     }
 
     pub fn mix_into(&self, channel: &mut impl Channel) {
         self.single_constraint_with_relation.mix_into(channel);
+        self.memory.mix_into(channel);
     }
 }
 
@@ -138,6 +166,7 @@ pub struct Components<const N: usize> {
     pub single_constraint: single_constraint::Component<N>,
     pub multiple_constraints: multiple_constraints::Component<N>,
     pub single_constraint_with_relation: single_constraint_with_relation::Component<N>,
+    pub memory: memory::Component,
 }
 
 impl<const N: usize> Components<N> {
@@ -172,6 +201,14 @@ impl<const N: usize> Components<N> {
                     .single_constraint_with_relation
                     .claimed_sum,
             ),
+            memory: memory::Component::new(
+                location_allocator,
+                memory::Eval {
+                    claim: claim.memory,
+                    memory: relations.memory.clone(),
+                },
+                interaction_claim.memory.claimed_sum,
+            ),
         }
     }
 
@@ -180,6 +217,7 @@ impl<const N: usize> Components<N> {
             &self.single_constraint,
             &self.multiple_constraints,
             &self.single_constraint_with_relation,
+            &self.memory,
         ]
     }
 
@@ -188,6 +226,7 @@ impl<const N: usize> Components<N> {
             &self.single_constraint,
             &self.multiple_constraints,
             &self.single_constraint_with_relation,
+            &self.memory,
         ]
     }
 }

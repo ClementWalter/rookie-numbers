@@ -49,7 +49,7 @@ where
 
     // Execution traces
     info!("execution trace");
-    let claim = Claim::new(log_size);
+    let mut claim = Claim::new(log_size);
     claim.mix_into(channel);
 
     let (trace, lookup_data) = claim.write_trace();
@@ -59,12 +59,19 @@ where
 
     // Interaction trace
     // Draw interaction elements.
+    info!(
+        "proof of work with {} bits",
+        relations::INTERACTION_POW_BITS
+    );
     let interaction_pow = SimdBackend::grind(channel, relations::INTERACTION_POW_BITS);
     channel.mix_u64(interaction_pow);
+
+    info!("interaction trace");
     let relations = Relations::draw(channel);
 
     let (interaction_trace, interaction_claim) =
         InteractionClaim::write_interaction_trace(&relations, &lookup_data);
+    interaction_claim.mix_into(channel);
 
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(interaction_trace);
@@ -138,6 +145,8 @@ where
     if channel.trailing_zeros() < relations::INTERACTION_POW_BITS {
         return Err(VerificationError::Stwo(StwoVerificationError::ProofOfWork));
     }
+
+    info!("interaction trace");
     let relations = Relations::draw(channel);
 
     // Verify lookup argument.

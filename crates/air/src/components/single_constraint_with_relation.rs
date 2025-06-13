@@ -39,7 +39,7 @@ pub struct InteractionClaim {
 /// It is then used to generate the interaction trace once the challenge has been drawn.
 #[derive(Uninitialized, IterMut, ParIterMut)]
 pub struct LookupData {
-    memory: Vec<[PackedM31; 2]>,
+    pub memory: Vec<[PackedM31; 2]>,
 }
 
 impl Claim {
