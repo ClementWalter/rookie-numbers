@@ -9,6 +9,7 @@ use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::Relation;
 use stwo_prover::constraint_framework::RelationEntry;
 use stwo_prover::core::backend::simd::m31::PackedM31;
+use stwo_prover::core::backend::simd::m31::LOG_N_LANES;
 use stwo_prover::core::backend::simd::qm31::PackedQM31;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::fields::qm31::SecureField;
@@ -65,7 +66,7 @@ impl Claim {
         let (mut trace, mut lookup_data) = unsafe {
             (
                 ComponentTrace::<3>::uninitialized(self.log_size),
-                LookupData::uninitialized(self.log_size),
+                LookupData::uninitialized(self.log_size - LOG_N_LANES),
             )
         };
 
