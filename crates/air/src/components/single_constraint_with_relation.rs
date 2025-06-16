@@ -98,7 +98,7 @@ impl InteractionClaim {
         InteractionClaim,
     ) {
         let log_size = lookup_data.memory.len().ilog2();
-        let mut interaction_trace = LogupTraceGenerator::new(log_size);
+        let mut interaction_trace = LogupTraceGenerator::new(log_size + LOG_N_LANES);
 
         let mut col = interaction_trace.new_col();
         (col.par_iter_mut(), &lookup_data.memory)
