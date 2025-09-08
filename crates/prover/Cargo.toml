@@ -13,6 +13,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 divan = "0.1.21"
+peak_alloc = "0.2"
 
 [[bench]]
 name = "example"
