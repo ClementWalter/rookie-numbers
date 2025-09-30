@@ -1,4 +1,5 @@
 use rayon::iter::ParallelIterator;
+use serde::{Deserialize, Serialize};
 pub use stwo_air_utils::trace::component_trace::ComponentTrace;
 pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
 pub use stwo_prover::core::backend::simd::m31::PackedM31;
@@ -12,7 +13,7 @@ use stwo_prover::{
     },
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct Claim<const N: usize> {
     pub log_size: u32,
 }
@@ -50,6 +51,7 @@ impl<const N: usize> Claim<N> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Eval<const N: usize> {
     pub claim: Claim<N>,
 }

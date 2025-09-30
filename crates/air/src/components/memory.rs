@@ -28,13 +28,14 @@ use stwo_prover::{
 };
 
 use crate::relations;
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Serialize, Deserialize)]
 pub struct Claim {
     pub log_size: u32,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct InteractionClaim {
     pub claimed_sum: SecureField,
 }

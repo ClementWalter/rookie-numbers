@@ -77,6 +77,14 @@ where
     tree_builder.extend_evals(interaction_trace);
     tree_builder.commit(channel);
 
+    println!(
+        "commitment scheme tree widths: {:?} (evaluations per tree)",
+        commitment_scheme
+            .trees
+            .as_ref()
+            .map(|tree| tree.evaluations.len())
+    );
+
     // Prove stark.
     info!("prove stark");
     let mut tree_span_provider =

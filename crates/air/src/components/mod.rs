@@ -22,6 +22,9 @@ use stwo_prover::{
 
 use crate::relations;
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Claim<const N: usize> {
     pub single_constraint: single_constraint::Claim<N>,
     pub multiple_constraints: multiple_constraints::Claim<N>,
@@ -38,6 +41,7 @@ pub struct LookupData {
     pub memory: memory::LookupData,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct InteractionClaim<const N: usize> {
     pub single_constraint_with_relation: single_constraint_with_relation::InteractionClaim,
     pub memory: memory::InteractionClaim,
