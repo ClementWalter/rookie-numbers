@@ -20,7 +20,7 @@ use stwo_prover::{
     },
 };
 
-use crate::relations;
+use crate::air::relations;
 
 use serde::{Deserialize, Serialize};
 

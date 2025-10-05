@@ -1,4 +1,4 @@
-use crate::relations;
+use crate::air::relations;
 use num_traits::identities::One;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelIterator;

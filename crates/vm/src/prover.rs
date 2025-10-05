@@ -1,7 +1,7 @@
-use air::components::{Claim, Components, InteractionClaim, Relations};
-use air::preprocessed::PreProcessedTrace;
-use air::relations;
-use air::Proof;
+use crate::air::components::{Claim, Components, InteractionClaim, Relations};
+use crate::air::preprocessed::PreProcessedTrace;
+use crate::air::relations;
+use crate::air::Proof;
 use num_traits::Zero;
 use std::time::Instant;
 use stwo_prover::constraint_framework::TraceLocationAllocator;

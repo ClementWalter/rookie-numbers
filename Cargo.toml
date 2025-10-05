@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/prover", "crates/air"]
+members = ["crates/vm"]
 resolver = "2"
 
 [workspace.package]
@@ -15,7 +15,6 @@ stwo-air-utils = { git = "https://github.com/starkware-libs/stwo", rev = "8b5436
 rayon = "1.10.0"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-air = { path = "crates/air" }
 num-traits = "0.2.19"
 rand = "0.8.5"
 thiserror = { version = "2.0.10", default-features = false }

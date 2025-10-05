@@ -1,5 +1,5 @@
-use prover::prover::{prove_rookie, verify_rookie};
 use stwo_prover::core::vcs::blake2_merkle::Blake2sMerkleChannel;
+use vm::prover::{prove_rookie, verify_rookie};
 
 #[test]
 fn test_prove_rookie() {
