@@ -760,6 +760,7 @@ name = "sha256"
 version = "0.0.1"
 dependencies = [
  "bincode",
+ "itertools 0.13.0",
  "num-traits",
  "serde",
  "serde_json",

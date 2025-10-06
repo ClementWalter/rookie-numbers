@@ -108,6 +108,19 @@ impl Relations {
             range_check_add: RangeCheckAdd::draw(channel),
         }
     }
+
+    pub fn dummy() -> Self {
+        Self {
+            sigma0: Sigma0::dummy(),
+            sigma1: Sigma1::dummy(),
+            big_sigma0: BigSigma0::dummy(),
+            big_sigma1: BigSigma1::dummy(),
+            ch_left: ChLeft::dummy(),
+            ch_right: ChRight::dummy(),
+            maj: Maj::dummy(),
+            range_check_add: RangeCheckAdd::dummy(),
+        }
+    }
 }
 
 pub struct LookupData {
