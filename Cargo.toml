@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/vm"]
+members = ["crates/vm", "crates/sha256"]
 resolver = "2"
 
 [workspace.package]

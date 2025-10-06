@@ -756,6 +756,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha256"
+version = "0.0.1"
+dependencies = [
+ "bincode",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "stwo-prover",
+ "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
