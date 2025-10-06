@@ -19,25 +19,6 @@ use stwo_prover::relation;
 use crate::CHUNK_SIZE;
 use crate::H_SIZE;
 
-/// This will be used to identify the function part in the relation.
-#[repr(u32)]
-enum Partition {
-    O1,
-    O2,
-    O3,
-    I0_L,
-    I0_H,
-    I1_L,
-    I1_H,
-    I0_H0,
-    I0_H1,
-    I1_L0,
-    I1_L1,
-    ADD4,
-    ADD6,
-    ADD7,
-}
-
 // Scheduling lookups
 relation!(Sigma0, 6);
 pub struct Sigma0LookupData {

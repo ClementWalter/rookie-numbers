@@ -1,4 +1,5 @@
 #![allow(non_camel_case_types)]
+pub mod partitions;
 pub mod relations;
 
 use num_traits::Zero;
