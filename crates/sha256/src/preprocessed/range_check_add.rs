@@ -19,9 +19,9 @@ pub struct LookupData {
     pub add: [BaseColumn; 2], // [value, carry]
 }
 
-pub struct RangeCheckAddColumns;
+pub struct Columns;
 
-impl PreProcessedColumn for RangeCheckAddColumns {
+impl PreProcessedColumn for Columns {
     /// For columns, one for RangeCheck16, and one for each carry. Unused carries are 0.
     fn log_size(&self) -> Vec<u32> {
         vec![19, 19, 19, 19]
@@ -92,10 +92,10 @@ mod tests {
 
     #[test]
     fn test_ids() {
-        assert_eq!(RangeCheckAddColumns.id().len(), N_COLUMNS);
+        assert_eq!(Columns.id().len(), N_COLUMNS);
 
         assert_eq!(
-            RangeCheckAddColumns.id(),
+            Columns.id(),
             vec![
                 PreProcessedColumnId {
                     id: "range_check_add_LIMB".to_string(),
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_gen_column_simd() {
-        let columns = RangeCheckAddColumns.gen_column_simd();
+        let columns = Columns.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS);
         assert_eq!(columns[0].values.len().ilog2(), 19);
         assert_eq!(columns[1].values.len().ilog2(), 19);

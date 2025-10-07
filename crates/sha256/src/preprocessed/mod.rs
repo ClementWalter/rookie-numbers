@@ -45,7 +45,16 @@ impl PreProcessedTrace {
 
 impl Default for PreProcessedTrace {
     fn default() -> Self {
-        let columns = vec![];
+        let columns: Vec<Box<dyn PreProcessedColumn>> = vec![
+            Box::new(big_sigma_0::Columns),
+            Box::new(big_sigma_1::Columns),
+            Box::new(ch_left::Columns),
+            Box::new(ch_right::Columns),
+            Box::new(maj::Columns),
+            Box::new(range_check_add::Columns),
+            Box::new(sigma_0::Columns),
+            Box::new(sigma_1::Columns),
+        ];
         Self { columns }
     }
 }

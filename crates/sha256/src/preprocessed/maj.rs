@@ -27,9 +27,9 @@ pub struct LookupData {
     pub i1_h: [BaseColumn; N_COLUMNS],   // [a, b, c, o_io_h_0]
 }
 
-pub struct MajColumns;
+pub struct Columns;
 
-impl PreProcessedColumn for MajColumns {
+impl PreProcessedColumn for Columns {
     fn log_size(&self) -> Vec<u32> {
         vec![
             // I0_L lookup
@@ -161,10 +161,10 @@ mod tests {
 
     #[test]
     fn test_ids() {
-        assert_eq!(MajColumns.id().len(), N_COLUMNS * 6);
+        assert_eq!(Columns.id().len(), N_COLUMNS * 6);
 
         assert_eq!(
-            MajColumns.id(),
+            Columns.id(),
             vec![
                 PreProcessedColumnId {
                     id: "Maj_I0_L_A".to_string(),
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_gen_column_simd() {
-        let columns = MajColumns.gen_column_simd();
+        let columns = Columns.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS * 6);
         assert_eq!(
             columns[0].values.len().ilog2(),
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_random_input() {
-        let columns = MajColumns.gen_column_simd();
+        let columns = Columns.gen_column_simd();
 
         let mut lookup_i0_l: HashMap<(u32, u32, u32), u32> = HashMap::new();
         columns[0]

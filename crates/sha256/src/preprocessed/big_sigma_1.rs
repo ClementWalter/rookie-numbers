@@ -26,9 +26,9 @@ pub struct LookupData {
     pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
 }
 
-pub struct BigSigma1Columns;
+pub struct Columns;
 
-impl PreProcessedColumn for BigSigma1Columns {
+impl PreProcessedColumn for Columns {
     fn log_size(&self) -> Vec<u32> {
         vec![
             // IO lookup
@@ -202,7 +202,7 @@ mod tests {
     const N_COLUMNS: usize = N_IO_COLUMNS + N_I1_COLUMNS + N_O2_COLUMNS;
     #[test]
     fn test_ids() {
-        let big_sigma1 = BigSigma1Columns {};
+        let big_sigma1 = Columns {};
         assert_eq!(big_sigma1.id().len(), N_COLUMNS);
         assert_eq!(
             big_sigma1.id(),
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_gen_column_simd() {
-        let big_sigma1 = BigSigma1Columns {};
+        let big_sigma1 = Columns {};
         let columns = big_sigma1.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS);
         assert_eq!(
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_random_input() {
-        let columns = BigSigma1Columns {}.gen_column_simd();
+        let columns = Columns {}.gen_column_simd();
 
         let mut lookup_i0: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
         columns[0]
