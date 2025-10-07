@@ -24,6 +24,7 @@ use stwo_prover::core::prover::{prove, StarkProof};
 use stwo_prover::core::vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
 use stwo_prover::core::ColumnVec;
 
+use crate::preprocessed::PreProcessedTrace;
 use crate::relations::{LookupData, Relations};
 
 use tracing::{info, span, Level};
@@ -115,10 +116,10 @@ pub fn prove_sha256(
         CommitmentSchemeProver::<_, Blake2sMerkleChannel>::new(config, &twiddles);
 
     // Preprocessed trace.
+    let preprocessed_trace = PreProcessedTrace::default();
     let span = span!(Level::INFO, "Constant").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
-    let constant_trace = vec![];
-    tree_builder.extend_evals(constant_trace);
+    tree_builder.extend_evals(preprocessed_trace.gen_trace());
     tree_builder.commit(channel);
     span.exit();
 
@@ -143,7 +144,7 @@ pub fn prove_sha256(
 
     // Prove constraints.
     let component = Component::new(
-        &mut TraceLocationAllocator::default(),
+        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
         Eval {
             log_size,
             relations,
