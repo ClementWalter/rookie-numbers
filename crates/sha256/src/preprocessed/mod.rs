@@ -8,7 +8,10 @@ use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::poly::circle::CircleEvaluation;
 use stwo_prover::core::poly::BitReversedOrder;
 
+pub mod big_sigma_0;
+pub mod big_sigma_1;
 pub mod sigma_0;
+pub mod sigma_1;
 
 pub trait PreProcessedColumn {
     fn log_size(&self) -> Vec<u32>;

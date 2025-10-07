@@ -1,6 +1,6 @@
-use crate::partitions::{Sigma0 as Sigma0Partitions, SubsetIterator};
+use crate::partitions::{Sigma1 as Sigma1Partitions, SubsetIterator};
 use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::small_sigma0;
+use crate::sha256::small_sigma1;
 
 use itertools::Itertools;
 use stwo_prover::core::backend::simd::column::BaseColumn;
@@ -16,38 +16,38 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(Sigma0, 6);
-/// Lookup data for the Sigma0 function.
-/// The small_sigma0 function is emulated with 3 lookups, one for each partition I0, I1,
+relation!(Sigma1, 6);
+/// Lookup data for the Sigma1 function.
+/// The sigma1 function is emulated with 3 lookups, one for each partition I0, I1,
 /// and a final lookup for O2 xor.
-pub struct Sigma0LookupData {
+pub struct Sigma1LookupData {
     pub i0: [BaseColumn; N_IO_COLUMNS], // [i0_l, i0_h, o0_l, o0_h, o20]
     pub i1: [BaseColumn; N_I1_COLUMNS], // [i1_l, i1_h, o1_l, o1_h, o21]
     pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
 }
 
-pub struct Sigma0Columns {}
+pub struct Sigma1Columns {}
 
-impl PreProcessedColumn for Sigma0Columns {
+impl PreProcessedColumn for Sigma1Columns {
     fn log_size(&self) -> Vec<u32> {
         vec![
             // IO lookup
-            Sigma0Partitions::I0.count_ones(),
-            Sigma0Partitions::I0.count_ones(),
-            Sigma0Partitions::I0.count_ones(),
-            Sigma0Partitions::I0.count_ones(),
-            Sigma0Partitions::I0.count_ones(),
+            Sigma1Partitions::I0.count_ones(),
+            Sigma1Partitions::I0.count_ones(),
+            Sigma1Partitions::I0.count_ones(),
+            Sigma1Partitions::I0.count_ones(),
+            Sigma1Partitions::I0.count_ones(),
             // I1 lookup
-            Sigma0Partitions::I1.count_ones(),
-            Sigma0Partitions::I1.count_ones(),
-            Sigma0Partitions::I1.count_ones(),
-            Sigma0Partitions::I1.count_ones(),
-            Sigma0Partitions::I1.count_ones(),
+            Sigma1Partitions::I1.count_ones(),
+            Sigma1Partitions::I1.count_ones(),
+            Sigma1Partitions::I1.count_ones(),
+            Sigma1Partitions::I1.count_ones(),
+            Sigma1Partitions::I1.count_ones(),
             // O2 lookup
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
+            Sigma1Partitions::O2.count_ones(),
+            Sigma1Partitions::O2.count_ones(),
+            Sigma1Partitions::O2.count_ones(),
+            Sigma1Partitions::O2.count_ones(),
         ]
     }
 
@@ -58,23 +58,23 @@ impl PreProcessedColumn for Sigma0Columns {
             "O2_0", "O2_1", "O2_L", "O2_H", // O2 lookup
         ]
         .map(|i| PreProcessedColumnId {
-            id: format!("Sigma0_{}", i),
+            id: format!("Sigma1_{}", i),
         })
         .to_vec()
     }
 
     fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
         // I0 lookup
-        let domain_i0 = CanonicCoset::new(Sigma0Partitions::I0.count_ones()).circle_domain();
-        let i0_columns = SubsetIterator::new(Sigma0Partitions::I0)
-            .map(|x| (x, small_sigma0(x)))
+        let domain_i0 = CanonicCoset::new(Sigma1Partitions::I0.count_ones()).circle_domain();
+        let i0_columns = SubsetIterator::new(Sigma1Partitions::I0)
+            .map(|x| (x, small_sigma1(x)))
             .map(|(x, y)| {
                 (
-                    BaseField::from_u32_unchecked(x & Sigma0Partitions::I0_L),
-                    BaseField::from_u32_unchecked((x >> 16) & Sigma0Partitions::I0_H),
-                    BaseField::from_u32_unchecked(y & Sigma0Partitions::O0_L),
-                    BaseField::from_u32_unchecked((y >> 16) & Sigma0Partitions::O0_H),
-                    BaseField::from_u32_unchecked(y & Sigma0Partitions::O2),
+                    BaseField::from_u32_unchecked(x & Sigma1Partitions::I0_L),
+                    BaseField::from_u32_unchecked((x >> 16) & Sigma1Partitions::I0_H),
+                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O0_L),
+                    BaseField::from_u32_unchecked((y >> 16) & Sigma1Partitions::O0_H),
+                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O2),
                 )
             });
 
@@ -107,16 +107,16 @@ impl PreProcessedColumn for Sigma0Columns {
         ];
 
         // I1 lookup
-        let domain_i1 = CanonicCoset::new(Sigma0Partitions::I1.count_ones()).circle_domain();
-        let i1_columns = SubsetIterator::new(Sigma0Partitions::I1)
-            .map(|x| (x, small_sigma0(x)))
+        let domain_i1 = CanonicCoset::new(Sigma1Partitions::I1.count_ones()).circle_domain();
+        let i1_columns = SubsetIterator::new(Sigma1Partitions::I1)
+            .map(|x| (x, small_sigma1(x)))
             .map(|(x, y)| {
                 (
-                    BaseField::from_u32_unchecked(x & Sigma0Partitions::I1_L),
-                    BaseField::from_u32_unchecked((x >> 16) & Sigma0Partitions::I1_H),
-                    BaseField::from_u32_unchecked(y & Sigma0Partitions::O1_L),
-                    BaseField::from_u32_unchecked((y >> 16) & Sigma0Partitions::O1_H),
-                    BaseField::from_u32_unchecked(y & Sigma0Partitions::O2),
+                    BaseField::from_u32_unchecked(x & Sigma1Partitions::I1_L),
+                    BaseField::from_u32_unchecked((x >> 16) & Sigma1Partitions::I1_H),
+                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O1_L),
+                    BaseField::from_u32_unchecked((y >> 16) & Sigma1Partitions::O1_H),
+                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O2),
                 )
             });
 
@@ -149,9 +149,9 @@ impl PreProcessedColumn for Sigma0Columns {
         ];
 
         // O2 lookup
-        let domain_o2 = CanonicCoset::new(Sigma0Partitions::O2.count_ones() * 2).circle_domain();
-        let o2_columns = SubsetIterator::new(Sigma0Partitions::O2)
-            .flat_map(move |x| SubsetIterator::new(Sigma0Partitions::O2).map(move |y| (x, y)))
+        let domain_o2 = CanonicCoset::new(Sigma1Partitions::O2.count_ones() * 2).circle_domain();
+        let o2_columns = SubsetIterator::new(Sigma1Partitions::O2)
+            .flat_map(move |x| SubsetIterator::new(Sigma1Partitions::O2).map(move |y| (x, y)))
             .map(|(x, y)| {
                 (
                     BaseField::from_u32_unchecked(x),
@@ -202,52 +202,52 @@ mod tests {
     const N_COLUMNS: usize = N_IO_COLUMNS + N_I1_COLUMNS + N_O2_COLUMNS;
     #[test]
     fn test_ids() {
-        let small_sigma0 = Sigma0Columns {};
-        assert_eq!(small_sigma0.id().len(), N_COLUMNS);
+        let sigma1 = Sigma1Columns {};
+        assert_eq!(sigma1.id().len(), N_COLUMNS);
         assert_eq!(
-            small_sigma0.id(),
+            sigma1.id(),
             vec![
                 PreProcessedColumnId {
-                    id: "Sigma0_I0_L".to_string(),
+                    id: "Sigma1_I0_L".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I0_H".to_string(),
+                    id: "Sigma1_I0_H".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O0_L".to_string(),
+                    id: "Sigma1_O0_L".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O0_H".to_string(),
+                    id: "Sigma1_O0_H".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O20".to_string(),
+                    id: "Sigma1_O20".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I1_L".to_string(),
+                    id: "Sigma1_I1_L".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I1_H".to_string(),
+                    id: "Sigma1_I1_H".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O1_L".to_string(),
+                    id: "Sigma1_O1_L".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O1_H".to_string(),
+                    id: "Sigma1_O1_H".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O21".to_string(),
+                    id: "Sigma1_O21".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_0".to_string(),
+                    id: "Sigma1_O2_0".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_1".to_string(),
+                    id: "Sigma1_O2_1".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_L".to_string(),
+                    id: "Sigma1_O2_L".to_string(),
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_H".to_string(),
+                    id: "Sigma1_O2_H".to_string(),
                 },
             ]
         );
@@ -255,70 +255,70 @@ mod tests {
 
     #[test]
     fn test_gen_column_simd() {
-        let small_sigma0 = Sigma0Columns {};
-        let columns = small_sigma0.gen_column_simd();
+        let sigma1 = Sigma1Columns {};
+        let columns = sigma1.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS);
         assert_eq!(
             columns[0].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
+            Sigma1Partitions::I0.count_ones()
         );
         assert_eq!(
             columns[1].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
+            Sigma1Partitions::I0.count_ones()
         );
         assert_eq!(
             columns[2].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
+            Sigma1Partitions::I0.count_ones()
         );
         assert_eq!(
             columns[3].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
+            Sigma1Partitions::I0.count_ones()
         );
         assert_eq!(
             columns[4].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
+            Sigma1Partitions::I0.count_ones()
         );
         assert_eq!(
             columns[5].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
+            Sigma1Partitions::I1.count_ones()
         );
         assert_eq!(
             columns[6].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
+            Sigma1Partitions::I1.count_ones()
         );
         assert_eq!(
             columns[7].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
+            Sigma1Partitions::I1.count_ones()
         );
         assert_eq!(
             columns[8].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
+            Sigma1Partitions::I1.count_ones()
         );
         assert_eq!(
             columns[9].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
+            Sigma1Partitions::I1.count_ones()
         );
         assert_eq!(
             columns[10].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
+            Sigma1Partitions::O2.count_ones() * 2
         );
         assert_eq!(
             columns[11].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
+            Sigma1Partitions::O2.count_ones() * 2
         );
         assert_eq!(
             columns[12].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
+            Sigma1Partitions::O2.count_ones() * 2
         );
         assert_eq!(
             columns[13].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
+            Sigma1Partitions::O2.count_ones() * 2
         );
     }
 
     #[test]
     fn test_random_input() {
-        let columns = Sigma0Columns {}.gen_column_simd();
+        let columns = Sigma1Columns {}.gen_column_simd();
 
         let mut lookup_i0: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
         columns[0]
@@ -364,15 +364,15 @@ mod tests {
         let (x_low, x_high) = (123456789_u32 & 0xffff, 123456789_u32 >> 16);
 
         // I0 lookup
-        let x_0_low = x_low & Sigma0Partitions::I0_L;
-        let x_0_high = x_high & Sigma0Partitions::I0_H;
+        let x_0_low = x_low & Sigma1Partitions::I0_L;
+        let x_0_high = x_high & Sigma1Partitions::I0_H;
         let lookup_i0_value = lookup_i0.get(&(x_0_low, x_0_high));
         assert!(lookup_i0_value.is_some());
         let (o0_l, o0_h, o20) = lookup_i0_value.unwrap();
 
         // I1 lookup
-        let x_1_low = x_low & Sigma0Partitions::I1_L;
-        let x_1_high = x_high & Sigma0Partitions::I1_H;
+        let x_1_low = x_low & Sigma1Partitions::I1_L;
+        let x_1_high = x_high & Sigma1Partitions::I1_H;
         let lookup_i1_value = lookup_i1.get(&(x_1_low, x_1_high));
         assert!(lookup_i1_value.is_some());
         let (o1_l, o1_h, o21) = lookup_i1_value.unwrap();
@@ -383,7 +383,7 @@ mod tests {
         let (o2_l, o2_h) = lookup_o2_value.unwrap();
 
         // Check the result
-        let expected = small_sigma0(x_low + (x_high << 16));
+        let expected = small_sigma1(x_low + (x_high << 16));
         assert_eq!(o0_l + o1_l + o2_l, expected & 0xffff);
         assert_eq!(o0_h + o1_h + o2_h, expected >> 16);
     }
