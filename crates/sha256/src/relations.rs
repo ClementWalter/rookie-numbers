@@ -16,38 +16,9 @@ use stwo_prover::core::backend::Column;
 use stwo_prover::core::channel::Channel;
 use stwo_prover::relation;
 
+use crate::preprocessed::{big_sigma_0, big_sigma_1, maj, sigma_0, sigma_1};
 use crate::CHUNK_SIZE;
 use crate::H_SIZE;
-
-// Scheduling lookups
-relation!(Sigma0, 6);
-pub struct Sigma0LookupData {
-    pub o0: [BaseColumn; 5], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub o1: [BaseColumn; 5], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; 4], // [o20, o21, o2_l, o2_h]
-}
-
-relation!(Sigma1, 6);
-pub struct Sigma1LookupData {
-    pub o0: [BaseColumn; 5], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub o1: [BaseColumn; 5], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; 4], // [o20, o21, o2_l, o2_h]
-}
-
-// Compression lookups
-relation!(BigSigma0, 7);
-pub struct BigSigma0LookupData {
-    pub o0: [BaseColumn; 6], // [i0_l, i0_h_0, i0_h_1, o0_l, o0_h, o20]
-    pub o1: [BaseColumn; 6], // [i1_l_0, i1_l_1, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; 4], // [o20, o21, o2_l, o2_h]
-}
-
-relation!(BigSigma1, 6);
-pub struct BigSigma1LookupData {
-    pub o0: [BaseColumn; 5], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub o1: [BaseColumn; 5], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; 4], // [o20, o21, o2_l, o2_h]
-}
 
 relation!(ChLeft, 4);
 pub struct ChLeftLookupData {
@@ -65,16 +36,6 @@ pub struct ChRightLookupData {
     pub i1_h: [BaseColumn; 3], // [e, g, result]
 }
 
-relation!(Maj, 5);
-pub struct MajLookupData {
-    pub i0_l: [BaseColumn; 4],  // [a, b, c, result]
-    pub i0_h0: [BaseColumn; 4], // [a, b, c, result]
-    pub i0_h1: [BaseColumn; 4], // [a, b, c, result]
-    pub i1_l0: [BaseColumn; 4], // [a, b, c, result]
-    pub i1_l1: [BaseColumn; 4], // [a, b, c, result]
-    pub i1_h: [BaseColumn; 4],  // [a, b, c, result]
-}
-
 // U32 range checks
 relation!(RangeCheckAdd, 10);
 pub struct RangeCheckAddData {
@@ -85,39 +46,39 @@ pub struct RangeCheckAddData {
 
 #[derive(Clone)]
 pub struct Relations {
-    pub sigma0: Sigma0,
-    pub sigma1: Sigma1,
-    pub big_sigma0: BigSigma0,
-    pub big_sigma1: BigSigma1,
+    pub sigma0: sigma_0::Relation,
+    pub sigma1: sigma_1::Relation,
+    pub big_sigma_0: big_sigma_0::Relation,
+    pub big_sigma_1: big_sigma_1::Relation,
     pub ch_left: ChLeft,
     pub ch_right: ChRight,
-    pub maj: Maj,
+    pub maj: maj::Relation,
     pub range_check_add: RangeCheckAdd,
 }
 
 impl Relations {
     pub fn draw(channel: &mut impl Channel) -> Self {
         Self {
-            sigma0: Sigma0::draw(channel),
-            sigma1: Sigma1::draw(channel),
-            big_sigma0: BigSigma0::draw(channel),
-            big_sigma1: BigSigma1::draw(channel),
+            sigma0: sigma_0::Relation::draw(channel),
+            sigma1: sigma_1::Relation::draw(channel),
+            big_sigma_0: big_sigma_0::Relation::draw(channel),
+            big_sigma_1: big_sigma_1::Relation::draw(channel),
             ch_left: ChLeft::draw(channel),
             ch_right: ChRight::draw(channel),
-            maj: Maj::draw(channel),
+            maj: maj::Relation::draw(channel),
             range_check_add: RangeCheckAdd::draw(channel),
         }
     }
 
     pub fn dummy() -> Self {
         Self {
-            sigma0: Sigma0::dummy(),
-            sigma1: Sigma1::dummy(),
-            big_sigma0: BigSigma0::dummy(),
-            big_sigma1: BigSigma1::dummy(),
+            sigma0: sigma_0::Relation::dummy(),
+            sigma1: sigma_1::Relation::dummy(),
+            big_sigma_0: big_sigma_0::Relation::dummy(),
+            big_sigma_1: big_sigma_1::Relation::dummy(),
             ch_left: ChLeft::dummy(),
             ch_right: ChRight::dummy(),
-            maj: Maj::dummy(),
+            maj: maj::Relation::dummy(),
             range_check_add: RangeCheckAdd::dummy(),
         }
     }
@@ -126,13 +87,13 @@ impl Relations {
 pub struct LookupData {
     pub initial_state: [BaseColumn; CHUNK_SIZE],
     pub final_state: [BaseColumn; H_SIZE],
-    pub sigma_0: Sigma0LookupData,
-    pub sigma_1: Sigma1LookupData,
-    pub big_sigma_0: BigSigma0LookupData,
-    pub big_sigma_1: BigSigma1LookupData,
+    pub sigma_0: sigma_0::LookupData,
+    pub sigma_1: sigma_1::LookupData,
+    pub big_sigma_0: big_sigma_0::LookupData,
+    pub big_sigma_1: big_sigma_1::LookupData,
     pub ch_left: ChLeftLookupData,
     pub ch_right: ChRightLookupData,
-    pub maj: MajLookupData,
+    pub maj: maj::LookupData,
     pub range_check_add: RangeCheckAddData,
 }
 
@@ -141,24 +102,24 @@ impl LookupData {
         Self {
             initial_state: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             final_state: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-            sigma_0: Sigma0LookupData {
-                o0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                o1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+            sigma_0: sigma_0::LookupData {
+                i0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 o2: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            sigma_1: Sigma1LookupData {
-                o0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                o1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+            sigma_1: sigma_1::LookupData {
+                i0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 o2: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            big_sigma_0: BigSigma0LookupData {
-                o0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                o1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+            big_sigma_0: big_sigma_0::LookupData {
+                i0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 o2: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            big_sigma_1: BigSigma1LookupData {
-                o0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                o1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+            big_sigma_1: big_sigma_1::LookupData {
+                i0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 o2: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
             ch_left: ChLeftLookupData {
@@ -173,12 +134,12 @@ impl LookupData {
                 i1_l: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 i1_h: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            maj: MajLookupData {
+            maj: maj::LookupData {
                 i0_l: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                i0_h0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                i0_h1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                i1_l0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                i1_l1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i0_h_0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i0_h_1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1_l_0: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+                i1_l_1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 i1_h: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
             range_check_add: RangeCheckAddData {

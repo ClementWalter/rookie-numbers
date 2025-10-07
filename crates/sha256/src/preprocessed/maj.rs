@@ -14,11 +14,11 @@ use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnI
 
 const N_COLUMNS: usize = 4;
 
-relation!(Maj, 5);
+relation!(Relation, 5);
 /// Lookup data for the Maj function.
 /// The maj function is emulated with 6 lookups, one for each partition I0, I1,
 /// and a final lookup for O2 xor.
-pub struct MajLookupData {
+pub struct LookupData {
     pub i0_l: [BaseColumn; N_COLUMNS],   // [a, b, c, o_io_l]
     pub i0_h_0: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]
     pub i0_h_1: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]

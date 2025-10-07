@@ -16,11 +16,11 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(Sigma0, 6);
+relation!(Relation, 6);
 /// Lookup data for the Sigma0 function.
 /// The small_sigma0 function is emulated with 3 lookups, one for each partition I0, I1,
 /// and a final lookup for O2 xor.
-pub struct Sigma0LookupData {
+pub struct LookupData {
     pub i0: [BaseColumn; N_IO_COLUMNS], // [i0_l, i0_h, o0_l, o0_h, o20]
     pub i1: [BaseColumn; N_I1_COLUMNS], // [i1_l, i1_h, o1_l, o1_h, o21]
     pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
