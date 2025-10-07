@@ -13,6 +13,7 @@ pub mod big_sigma_1;
 pub mod ch_left;
 pub mod ch_right;
 pub mod maj;
+pub mod range_check_add;
 pub mod sigma_0;
 pub mod sigma_1;
 

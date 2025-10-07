@@ -14,19 +14,12 @@
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::Column;
 use stwo_prover::core::channel::Channel;
-use stwo_prover::relation;
 
-use crate::preprocessed::{big_sigma_0, big_sigma_1, ch_left, ch_right, maj, sigma_0, sigma_1};
+use crate::preprocessed::{
+    big_sigma_0, big_sigma_1, ch_left, ch_right, maj, range_check_add, sigma_0, sigma_1,
+};
 use crate::CHUNK_SIZE;
 use crate::H_SIZE;
-
-// U32 range checks
-relation!(RangeCheckAdd, 10);
-pub struct RangeCheckAddData {
-    pub add4: [BaseColumn; 6], // [*_, result, carry]
-    pub add6: [BaseColumn; 8], // [*_, result, carry]
-    pub add7: [BaseColumn; 9], // [*_, result, carry]
-}
 
 #[derive(Clone)]
 pub struct Relations {
@@ -37,7 +30,7 @@ pub struct Relations {
     pub ch_left: ch_left::Relation,
     pub ch_right: ch_right::Relation,
     pub maj: maj::Relation,
-    pub range_check_add: RangeCheckAdd,
+    pub range_check_add: range_check_add::Relation,
 }
 
 impl Relations {
@@ -50,7 +43,7 @@ impl Relations {
             ch_left: ch_left::Relation::draw(channel),
             ch_right: ch_right::Relation::draw(channel),
             maj: maj::Relation::draw(channel),
-            range_check_add: RangeCheckAdd::draw(channel),
+            range_check_add: range_check_add::Relation::draw(channel),
         }
     }
 
@@ -63,7 +56,7 @@ impl Relations {
             ch_left: ch_left::Relation::dummy(),
             ch_right: ch_right::Relation::dummy(),
             maj: maj::Relation::dummy(),
-            range_check_add: RangeCheckAdd::dummy(),
+            range_check_add: range_check_add::Relation::dummy(),
         }
     }
 }
@@ -78,7 +71,7 @@ pub struct LookupData {
     pub ch_left: ch_left::LookupData,
     pub ch_right: ch_right::LookupData,
     pub maj: maj::LookupData,
-    pub range_check_add: RangeCheckAddData,
+    pub range_check_add: range_check_add::LookupData,
 }
 
 impl LookupData {
@@ -126,10 +119,8 @@ impl LookupData {
                 i1_l_1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 i1_h: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            range_check_add: RangeCheckAddData {
-                add4: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                add6: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
-                add7: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
+            range_check_add: range_check_add::LookupData {
+                add: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
         }
     }
