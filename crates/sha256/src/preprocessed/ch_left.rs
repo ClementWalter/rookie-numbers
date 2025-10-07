@@ -25,7 +25,7 @@ pub struct LookupData {
     pub i1_h: [BaseColumn; N_COLUMNS], // [e, f, o_i1_h]
 }
 
-pub struct ChLeftColumns {}
+pub struct ChLeftColumns;
 
 impl PreProcessedColumn for ChLeftColumns {
     fn log_size(&self) -> Vec<u32> {

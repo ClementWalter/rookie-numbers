@@ -26,7 +26,7 @@ pub struct LookupData {
     pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
 }
 
-pub struct BigSigma1Columns {}
+pub struct BigSigma1Columns;
 
 impl PreProcessedColumn for BigSigma1Columns {
     fn log_size(&self) -> Vec<u32> {
