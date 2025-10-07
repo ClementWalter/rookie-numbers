@@ -100,3 +100,49 @@ pub mod BigSigma1 {
     pub const O1_H: u32 = 0b0001100010001100;
     pub const O2_H: u32 = 0b1010010101010000;
 }
+
+/// Generates all subsets of the given bitmask `mask`
+pub struct SubsetIterator {
+    current: u32,
+    mask: u32,
+    done: bool, // Track if we've yielded 0
+}
+
+impl SubsetIterator {
+    pub fn new(mask: u32) -> Self {
+        SubsetIterator {
+            current: mask,
+            mask,
+            done: false,
+        }
+    }
+}
+
+impl Iterator for SubsetIterator {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        let current = self.current;
+        if current == 0 {
+            self.done = true; // Mark done after yielding 0
+        } else {
+            self.current = (current - 1) & self.mask;
+        }
+        Some(current)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::SubsetIterator;
+
+    #[test]
+    fn test_subset_iterator() {
+        let mask = 0b101;
+        let result = SubsetIterator::new(mask);
+        assert_eq!(result.collect::<Vec<_>>(), vec![5, 4, 1, 0]);
+    }
+}

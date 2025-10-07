@@ -1,6 +1,8 @@
 #![allow(non_camel_case_types)]
 pub mod partitions;
+pub mod preprocessed;
 pub mod relations;
+pub mod sha256;
 
 use itertools::Itertools;
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
