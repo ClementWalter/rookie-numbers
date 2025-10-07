@@ -16,17 +16,9 @@ use stwo_prover::core::backend::Column;
 use stwo_prover::core::channel::Channel;
 use stwo_prover::relation;
 
-use crate::preprocessed::{big_sigma_0, big_sigma_1, maj, sigma_0, sigma_1};
+use crate::preprocessed::{big_sigma_0, big_sigma_1, ch_left, maj, sigma_0, sigma_1};
 use crate::CHUNK_SIZE;
 use crate::H_SIZE;
-
-relation!(ChLeft, 4);
-pub struct ChLeftLookupData {
-    pub i0_l: [BaseColumn; 3], // [e, f, result]
-    pub i0_h: [BaseColumn; 3], // [e, f, result]
-    pub i1_l: [BaseColumn; 3], // [e, f, result]
-    pub i1_h: [BaseColumn; 3], // [e, f, result]
-}
 
 relation!(ChRight, 4);
 pub struct ChRightLookupData {
@@ -50,7 +42,7 @@ pub struct Relations {
     pub sigma1: sigma_1::Relation,
     pub big_sigma_0: big_sigma_0::Relation,
     pub big_sigma_1: big_sigma_1::Relation,
-    pub ch_left: ChLeft,
+    pub ch_left: ch_left::Relation,
     pub ch_right: ChRight,
     pub maj: maj::Relation,
     pub range_check_add: RangeCheckAdd,
@@ -63,7 +55,7 @@ impl Relations {
             sigma1: sigma_1::Relation::draw(channel),
             big_sigma_0: big_sigma_0::Relation::draw(channel),
             big_sigma_1: big_sigma_1::Relation::draw(channel),
-            ch_left: ChLeft::draw(channel),
+            ch_left: ch_left::Relation::draw(channel),
             ch_right: ChRight::draw(channel),
             maj: maj::Relation::draw(channel),
             range_check_add: RangeCheckAdd::draw(channel),
@@ -76,7 +68,7 @@ impl Relations {
             sigma1: sigma_1::Relation::dummy(),
             big_sigma_0: big_sigma_0::Relation::dummy(),
             big_sigma_1: big_sigma_1::Relation::dummy(),
-            ch_left: ChLeft::dummy(),
+            ch_left: ch_left::Relation::dummy(),
             ch_right: ChRight::dummy(),
             maj: maj::Relation::dummy(),
             range_check_add: RangeCheckAdd::dummy(),
@@ -91,7 +83,7 @@ pub struct LookupData {
     pub sigma_1: sigma_1::LookupData,
     pub big_sigma_0: big_sigma_0::LookupData,
     pub big_sigma_1: big_sigma_1::LookupData,
-    pub ch_left: ChLeftLookupData,
+    pub ch_left: ch_left::LookupData,
     pub ch_right: ChRightLookupData,
     pub maj: maj::LookupData,
     pub range_check_add: RangeCheckAddData,
@@ -122,7 +114,7 @@ impl LookupData {
                 i1: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 o2: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
             },
-            ch_left: ChLeftLookupData {
+            ch_left: ch_left::LookupData {
                 i0_l: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 i0_h: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
                 i1_l: std::array::from_fn(|_| BaseColumn::zeros(1 << log_size)),
