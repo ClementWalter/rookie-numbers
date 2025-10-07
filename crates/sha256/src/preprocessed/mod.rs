@@ -10,6 +10,7 @@ use stwo_prover::core::poly::BitReversedOrder;
 
 pub mod big_sigma_0;
 pub mod big_sigma_1;
+pub mod maj;
 pub mod sigma_0;
 pub mod sigma_1;
 
