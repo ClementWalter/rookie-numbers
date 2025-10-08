@@ -109,8 +109,8 @@ pub struct SubsetIterator {
 }
 
 impl SubsetIterator {
-    pub fn new(mask: u32) -> Self {
-        SubsetIterator {
+    pub const fn new(mask: u32) -> Self {
+        Self {
             current: mask,
             mask,
             done: false,

@@ -137,7 +137,7 @@ impl InteractionClaim {
         lookup_data: &LookupData,
     ) -> (
         impl IntoIterator<Item = CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-        InteractionClaim,
+        Self,
     ) {
         let log_size = lookup_data.memory.len().ilog2() + LOG_N_LANES;
         let mut interaction_trace = LogupTraceGenerator::new(log_size);
@@ -152,7 +152,7 @@ impl InteractionClaim {
         col.finalize_col();
 
         let (trace, claimed_sum) = interaction_trace.finalize_last();
-        (trace, InteractionClaim { claimed_sum })
+        (trace, Self { claimed_sum })
     }
 }
 

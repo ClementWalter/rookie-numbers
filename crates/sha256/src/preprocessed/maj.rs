@@ -243,6 +243,7 @@ mod tests {
     }
 
     #[test]
+    /* trunk-ignore(clippy/cognitive_complexity) */
     fn test_gen_column_simd() {
         let columns = Columns.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS * 6);

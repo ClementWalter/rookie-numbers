@@ -45,7 +45,7 @@ pub struct LookupData {
 }
 
 impl Claim {
-    pub fn new(log_size: u32) -> Self {
+    pub const fn new(log_size: u32) -> Self {
         Self { log_size }
     }
 
@@ -96,7 +96,7 @@ impl InteractionClaim {
         lookup_data: &LookupData,
     ) -> (
         impl IntoIterator<Item = CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-        InteractionClaim,
+        Self,
     ) {
         let log_size = lookup_data.memory.len().ilog2();
         let mut interaction_trace = LogupTraceGenerator::new(log_size + LOG_N_LANES);
@@ -111,7 +111,7 @@ impl InteractionClaim {
         col.finalize_col();
 
         let (trace, claimed_sum) = interaction_trace.finalize_last();
-        (trace, InteractionClaim { claimed_sum })
+        (trace, Self { claimed_sum })
     }
 }
 
@@ -134,7 +134,7 @@ impl FrameworkEval for Eval {
         let col1 = eval.next_trace_mask();
         let col2 = eval.next_trace_mask();
 
-        eval.add_constraint(col0.clone() + col1.clone() - col2.clone());
+        eval.add_constraint(col0.clone() + col1.clone() - col2);
 
         eval.add_to_relation(RelationEntry::new(
             &self.memory,
