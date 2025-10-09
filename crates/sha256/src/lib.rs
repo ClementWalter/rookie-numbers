@@ -1,4 +1,6 @@
 #![allow(non_camel_case_types)]
+#![feature(portable_simd)]
+pub mod components;
 pub mod partitions;
 pub mod preprocessed;
 pub mod relations;

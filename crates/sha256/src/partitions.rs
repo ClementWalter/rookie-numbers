@@ -1,3 +1,7 @@
+use std::simd::cmp::SimdPartialEq;
+use std::simd::num::SimdUint;
+use std::simd::{simd_swizzle, u16x16, u16x32, u32x16, Simd};
+
 /// This will be used to identify the function part in the relation.
 #[repr(u32)]
 pub enum Partition {
@@ -135,7 +139,8 @@ impl Iterator for SubsetIterator {
     }
 }
 
-pub fn pext_u32(x: u32, mut mask: u32) -> u32 {
+#[inline]
+pub const fn pext_u32(x: u32, mut mask: u32) -> u32 {
     // Extract bits from x where mask has 1s, packed to the low bits (LSB-first).
     let mut out = 0u32;
     let mut bb = 1u32;
@@ -150,9 +155,70 @@ pub fn pext_u32(x: u32, mut mask: u32) -> u32 {
     out
 }
 
+#[inline]
+pub fn pext_u32x16(x: u32x16, mut mask: u32) -> u32x16 {
+    // Extract bits from each lane of x where the scalar mask has 1s, packed to LSBs.
+    let mut out = Simd::splat(0u32);
+    let mut bb = Simd::splat(1u32);
+    while mask != 0 {
+        let ls = mask & mask.wrapping_neg(); // lowest set bit in the scalar mask
+        let ls_v: u32x16 = Simd::splat(ls);
+        let contrib = (x & ls_v)
+            .simd_ne(Simd::splat(0u32))
+            .select(bb, Simd::splat(0u32));
+        out |= contrib;
+        mask ^= ls;
+        bb <<= Simd::splat(1u32);
+    }
+    out
+}
+
+#[inline(always)]
+pub fn widen_add_u16x32(lows: u16x32, highs: u16x32) -> (u32x16, u32x16) {
+    let a_lo: u16x16 = simd_swizzle!(lows, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    let b_lo: u16x16 = simd_swizzle!(
+        lows,
+        [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    );
+    let a_hi: u16x16 = simd_swizzle!(
+        highs,
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    );
+    let b_hi: u16x16 = simd_swizzle!(
+        highs,
+        [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    );
+
+    let a_lo32: u32x16 = a_lo.cast();
+    let a_hi32: u32x16 = a_hi.cast();
+    let a = a_lo32 + (a_hi32 << 16);
+    let b_lo32: u32x16 = b_lo.cast();
+    let b_hi32: u32x16 = b_hi.cast();
+    let b = b_lo32 + (b_hi32 << 16);
+
+    (a, b)
+}
+
+#[inline]
+pub fn concat_u16x16(a: u16x16, b: u16x16) -> u16x32 {
+    let mut buf = [0u16; 32];
+    // copy the 16 lanes from each half
+    buf[..16].copy_from_slice(&a.to_array());
+    buf[16..].copy_from_slice(&b.to_array());
+    u16x32::from_array(buf)
+}
+
+#[inline]
+pub fn pext_u32_u16x32(output_low: u16x32, output_high: u16x32, mask: u32) -> u16x32 {
+    let (output_0, output_1) = widen_add_u16x32(output_low, output_high);
+    let output_o2_0: u16x16 = pext_u32x16(output_0, mask).cast();
+    let output_o2_1: u16x16 = pext_u32x16(output_1, mask).cast();
+    concat_u16x16(output_o2_0, output_o2_1)
+}
+
 #[cfg(test)]
 mod test {
-    use super::{pext_u32, SubsetIterator};
+    use super::*;
 
     #[test]
     fn test_subset_iterator() {
@@ -166,5 +232,12 @@ mod test {
         let x = 0b1110;
         let mask = 0b101;
         assert_eq!(pext_u32(x, mask), 0b10);
+    }
+
+    #[test]
+    fn test_pext_u32x16() {
+        let x = u32x16::splat(0b1110);
+        let mask = 0b101;
+        assert_eq!(pext_u32x16(x, mask), u32x16::splat(0b10));
     }
 }

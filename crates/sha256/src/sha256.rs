@@ -1,4 +1,61 @@
 //! SHA-256 functions
+
+use std::simd::u32x16;
+
+/// Right rotate a 32-bit value expressed as two 16-bit values (low, high)
+#[inline(always)]
+pub fn rotr_u32x16<const K: u32>(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let s = u32x16::splat(K);
+    let s_inv = u32x16::splat(32 - K);
+    let lo_r = (lo >> s) | (hi << s_inv);
+    let hi_r = (hi >> s) | (lo << s_inv);
+    (lo_r, hi_r)
+}
+
+/// Right shift a 32-bit value expressed as two 16-bit values (low, high)
+#[inline(always)]
+pub fn shr_u32x16<const K: u32>(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let s = u32x16::splat(K);
+    let s_inv = u32x16::splat(32 - K);
+    ((lo >> s) | (hi << s_inv), hi >> s)
+}
+
+/// SHA-256 σ₀ function used in message scheduling
+#[inline(always)]
+pub fn small_sigma0_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let (r7_lo, r7_hi) = rotr_u32x16::<7>(lo, hi);
+    let (r18_lo, r18_hi) = rotr_u32x16::<18>(lo, hi);
+    let (sh3_lo, sh3_hi) = shr_u32x16::<3>(lo, hi);
+    (r7_lo ^ r18_lo ^ sh3_lo, r7_hi ^ r18_hi ^ sh3_hi)
+}
+
+/// SHA-256 σ₁ function used in message scheduling
+#[inline(always)]
+pub fn small_sigma1_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let (r17_lo, r17_hi) = rotr_u32x16::<17>(lo, hi);
+    let (r19_lo, r19_hi) = rotr_u32x16::<19>(lo, hi);
+    let (sh10_lo, sh10_hi) = shr_u32x16::<10>(lo, hi);
+    (r17_lo ^ r19_lo ^ sh10_lo, r17_hi ^ r19_hi ^ sh10_hi)
+}
+
+/// SHA-256 Σ₀ function used in the compression function
+#[inline(always)]
+pub fn big_sigma0_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let (r2_lo, r2_hi) = rotr_u32x16::<2>(lo, hi);
+    let (r13_lo, r13_hi) = rotr_u32x16::<13>(lo, hi);
+    let (r22_lo, r22_hi) = rotr_u32x16::<22>(lo, hi);
+    (r2_lo ^ r13_lo ^ r22_lo, r2_hi ^ r13_hi ^ r22_hi)
+}
+
+/// SHA-256 Σ₁ function used in the compression function
+#[inline(always)]
+pub fn big_sigma1_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
+    let (r6_lo, r6_hi) = rotr_u32x16::<6>(lo, hi);
+    let (r11_lo, r11_hi) = rotr_u32x16::<11>(lo, hi);
+    let (r25_lo, r25_hi) = rotr_u32x16::<25>(lo, hi);
+    (r6_lo ^ r11_lo ^ r25_lo, r6_hi ^ r11_hi ^ r25_hi)
+}
+
 pub const fn small_sigma0(x: u32) -> u32 {
     x.rotate_right(7) ^ x.rotate_right(18) ^ (x >> 3)
 }
