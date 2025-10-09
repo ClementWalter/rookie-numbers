@@ -1,8 +1,5 @@
-use crate::partitions::{BigSigma0 as BigSigma0Partitions, SubsetIterator};
-use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::big_sigma0;
-
 use itertools::Itertools;
+use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
@@ -10,7 +7,9 @@ use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
 use stwo_prover::relation;
 
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
+use crate::partitions::{pext_u32, BigSigma0 as BigSigma0Partitions, SubsetIterator};
+use crate::preprocessed::PreProcessedColumn;
+use crate::sha256::big_sigma0;
 
 const N_IO_COLUMNS: usize = 6;
 const N_I1_COLUMNS: usize = 6;
@@ -77,7 +76,7 @@ impl PreProcessedColumn for Columns {
                     BaseField::from_u32_unchecked((x >> 24) & BigSigma0Partitions::I0_H1),
                     BaseField::from_u32_unchecked(y & BigSigma0Partitions::O0_L),
                     BaseField::from_u32_unchecked((y >> 16) & BigSigma0Partitions::O0_H),
-                    BaseField::from_u32_unchecked(y & BigSigma0Partitions::O2),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma0Partitions::O2)),
                 )
             });
 
@@ -125,7 +124,7 @@ impl PreProcessedColumn for Columns {
                     BaseField::from_u32_unchecked((x >> 16) & BigSigma0Partitions::I1_H),
                     BaseField::from_u32_unchecked(y & BigSigma0Partitions::O1_L),
                     BaseField::from_u32_unchecked((y >> 16) & BigSigma0Partitions::O1_H),
-                    BaseField::from_u32_unchecked(y & BigSigma0Partitions::O2),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma0Partitions::O2)),
                 )
             });
 
@@ -168,8 +167,8 @@ impl PreProcessedColumn for Columns {
             .flat_map(move |x| SubsetIterator::new(BigSigma0Partitions::O2).map(move |y| (x, y)))
             .map(|(x, y)| {
                 (
-                    BaseField::from_u32_unchecked(x),
-                    BaseField::from_u32_unchecked(y),
+                    BaseField::from_u32_unchecked(pext_u32(x, BigSigma0Partitions::O2)),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma0Partitions::O2)),
                     BaseField::from_u32_unchecked((x ^ y) & 0xffff),
                     BaseField::from_u32_unchecked((x ^ y) >> 16),
                 )

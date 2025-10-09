@@ -1,8 +1,5 @@
-use crate::partitions::{BigSigma1 as BigSigma1Partitions, SubsetIterator};
-use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::big_sigma1;
-
 use itertools::Itertools;
+use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
@@ -10,7 +7,9 @@ use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
 use stwo_prover::relation;
 
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
+use crate::partitions::{pext_u32, BigSigma1 as BigSigma1Partitions, SubsetIterator};
+use crate::preprocessed::PreProcessedColumn;
+use crate::sha256::big_sigma1;
 
 const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
@@ -74,7 +73,7 @@ impl PreProcessedColumn for Columns {
                     BaseField::from_u32_unchecked((x >> 16) & BigSigma1Partitions::I0_H),
                     BaseField::from_u32_unchecked(y & BigSigma1Partitions::O0_L),
                     BaseField::from_u32_unchecked((y >> 16) & BigSigma1Partitions::O0_H),
-                    BaseField::from_u32_unchecked(y & BigSigma1Partitions::O2),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma1Partitions::O2)),
                 )
             });
 
@@ -116,7 +115,7 @@ impl PreProcessedColumn for Columns {
                     BaseField::from_u32_unchecked((x >> 16) & BigSigma1Partitions::I1_H),
                     BaseField::from_u32_unchecked(y & BigSigma1Partitions::O1_L),
                     BaseField::from_u32_unchecked((y >> 16) & BigSigma1Partitions::O1_H),
-                    BaseField::from_u32_unchecked(y & BigSigma1Partitions::O2),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma1Partitions::O2)),
                 )
             });
 
@@ -154,8 +153,8 @@ impl PreProcessedColumn for Columns {
             .flat_map(move |x| SubsetIterator::new(BigSigma1Partitions::O2).map(move |y| (x, y)))
             .map(|(x, y)| {
                 (
-                    BaseField::from_u32_unchecked(x),
-                    BaseField::from_u32_unchecked(y),
+                    BaseField::from_u32_unchecked(pext_u32(x, BigSigma1Partitions::O2)),
+                    BaseField::from_u32_unchecked(pext_u32(y, BigSigma1Partitions::O2)),
                     BaseField::from_u32_unchecked((x ^ y) & 0xffff),
                     BaseField::from_u32_unchecked((x ^ y) >> 16),
                 )
@@ -194,9 +193,8 @@ impl PreProcessedColumn for Columns {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
+    use std::collections::HashMap;
     use stwo_prover::core::backend::Column;
 
     const N_COLUMNS: usize = N_IO_COLUMNS + N_I1_COLUMNS + N_O2_COLUMNS;

@@ -135,14 +135,36 @@ impl Iterator for SubsetIterator {
     }
 }
 
+pub fn pext_u32(x: u32, mut mask: u32) -> u32 {
+    // Extract bits from x where mask has 1s, packed to the low bits (LSB-first).
+    let mut out = 0u32;
+    let mut bb = 1u32;
+    while mask != 0 {
+        let ls = mask & mask.wrapping_neg(); // lowest set bit
+        if x & ls != 0 {
+            out |= bb;
+        }
+        mask ^= ls;
+        bb <<= 1;
+    }
+    out
+}
+
 #[cfg(test)]
 mod test {
-    use super::SubsetIterator;
+    use super::{pext_u32, SubsetIterator};
 
     #[test]
     fn test_subset_iterator() {
         let mask = 0b101;
         let result = SubsetIterator::new(mask);
         assert_eq!(result.collect::<Vec<_>>(), vec![5, 4, 1, 0]);
+    }
+
+    #[test]
+    fn test_pext_u32() {
+        let x = 0b1110;
+        let mask = 0b101;
+        assert_eq!(pext_u32(x, mask), 0b10);
     }
 }
