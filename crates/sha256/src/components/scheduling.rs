@@ -48,8 +48,8 @@ use tracing::Level;
 use std::simd::u32x16;
 
 const N_ROUNDS: usize = 48;
-const CHUNK_COLUMNS: usize = 16 * 2;
-const W_COLUMNS: usize = CHUNK_COLUMNS + 2 * N_ROUNDS;
+pub const CHUNK_COLUMNS: usize = 16 * 2;
+pub const W_COLUMNS: usize = CHUNK_COLUMNS + 2 * N_ROUNDS;
 const SIGMA0_COLUMNS: usize = 10;
 const SIGMA1_COLUMNS: usize = 10;
 const CARRIES_COLUMNS: usize = 2;
