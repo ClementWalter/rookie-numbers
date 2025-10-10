@@ -1,59 +1,48 @@
 //! SHA-256 functions
 
+use core::simd::Simd;
 use std::simd::u32x16;
 
-/// Right rotate a 32-bit value expressed as two 16-bit values (low, high)
 #[inline(always)]
-pub fn rotr_u32x16<const K: u32>(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let s = u32x16::splat(K);
-    let s_inv = u32x16::splat(32 - K);
-    let lo_r = (lo >> s) | (hi << s_inv);
-    let hi_r = (hi >> s) | (lo << s_inv);
-    (lo_r, hi_r)
+fn rotr_u32x16(x: u32x16, n: u32) -> u32x16 {
+    let n = Simd::splat(n);
+    let n2 = Simd::splat(32 - n[0]); // n is constant here, so n[0] is fine
+    (x >> n) | (x << n2)
 }
 
-/// Right shift a 32-bit value expressed as two 16-bit values (low, high)
 #[inline(always)]
-pub fn shr_u32x16<const K: u32>(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let s = u32x16::splat(K);
-    let s_inv = u32x16::splat(32 - K);
-    ((lo >> s) | (hi << s_inv), hi >> s)
+pub fn small_sigma0_u32x16(x: u32x16) -> u32x16 {
+    rotr_u32x16(x, 7) ^ rotr_u32x16(x, 18) ^ (x >> Simd::splat(3))
 }
 
-/// SHA-256 σ₀ function used in message scheduling
 #[inline(always)]
-pub fn small_sigma0_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let (r7_lo, r7_hi) = rotr_u32x16::<7>(lo, hi);
-    let (r18_lo, r18_hi) = rotr_u32x16::<18>(lo, hi);
-    let (sh3_lo, sh3_hi) = shr_u32x16::<3>(lo, hi);
-    (r7_lo ^ r18_lo ^ sh3_lo, r7_hi ^ r18_hi ^ sh3_hi)
+pub fn small_sigma1_u32x16(x: u32x16) -> u32x16 {
+    rotr_u32x16(x, 17) ^ rotr_u32x16(x, 19) ^ (x >> Simd::splat(10))
 }
 
-/// SHA-256 σ₁ function used in message scheduling
 #[inline(always)]
-pub fn small_sigma1_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let (r17_lo, r17_hi) = rotr_u32x16::<17>(lo, hi);
-    let (r19_lo, r19_hi) = rotr_u32x16::<19>(lo, hi);
-    let (sh10_lo, sh10_hi) = shr_u32x16::<10>(lo, hi);
-    (r17_lo ^ r19_lo ^ sh10_lo, r17_hi ^ r19_hi ^ sh10_hi)
+pub fn big_sigma0_u32x16(x: u32x16) -> u32x16 {
+    rotr_u32x16(x, 2) ^ rotr_u32x16(x, 13) ^ rotr_u32x16(x, 22)
 }
 
-/// SHA-256 Σ₀ function used in the compression function
 #[inline(always)]
-pub fn big_sigma0_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let (r2_lo, r2_hi) = rotr_u32x16::<2>(lo, hi);
-    let (r13_lo, r13_hi) = rotr_u32x16::<13>(lo, hi);
-    let (r22_lo, r22_hi) = rotr_u32x16::<22>(lo, hi);
-    (r2_lo ^ r13_lo ^ r22_lo, r2_hi ^ r13_hi ^ r22_hi)
+pub fn big_sigma1_u32x16(x: u32x16) -> u32x16 {
+    rotr_u32x16(x, 6) ^ rotr_u32x16(x, 11) ^ rotr_u32x16(x, 25)
 }
 
-/// SHA-256 Σ₁ function used in the compression function
 #[inline(always)]
-pub fn big_sigma1_u32x16(lo: u32x16, hi: u32x16) -> (u32x16, u32x16) {
-    let (r6_lo, r6_hi) = rotr_u32x16::<6>(lo, hi);
-    let (r11_lo, r11_hi) = rotr_u32x16::<11>(lo, hi);
-    let (r25_lo, r25_hi) = rotr_u32x16::<25>(lo, hi);
-    (r6_lo ^ r11_lo ^ r25_lo, r6_hi ^ r11_hi ^ r25_hi)
+pub fn ch_left_u32x16(e: u32x16, f: u32x16) -> u32x16 {
+    e & f
+}
+
+#[inline(always)]
+pub fn ch_right_u32x16(e: u32x16, g: u32x16) -> u32x16 {
+    (!e) & g
+}
+
+#[inline(always)]
+pub fn maj_u32x16(a: u32x16, b: u32x16, c: u32x16) -> u32x16 {
+    (a & b) ^ (a & c) ^ (b & c)
 }
 
 pub const fn small_sigma0(x: u32) -> u32 {
@@ -123,4 +112,91 @@ pub fn process_chunk(chunk: [u32; 16], mut hash: [u32; 8]) -> [u32; 8] {
     hash[6] += g;
     hash[7] += h;
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::izip;
+
+    use super::*;
+
+    #[test]
+    fn test_rotr_u32x16() {
+        let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+        assert_eq!(
+            base.map(|x| x.rotate_right(7)),
+            rotr_u32x16(u32x16::from_array(base), 7).to_array()
+        );
+    }
+
+    #[test]
+    fn test_small_sigma0_u32x16() {
+        let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        assert_eq!(
+            base.map(small_sigma0),
+            small_sigma0_u32x16(u32x16::from_array(base)).to_array()
+        );
+    }
+
+    #[test]
+    fn test_small_sigma1_u32x16() {
+        let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        assert_eq!(
+            base.map(small_sigma1),
+            small_sigma1_u32x16(u32x16::from_array(base)).to_array()
+        );
+    }
+
+    #[test]
+    fn test_big_sigma0_u32x16() {
+        let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        assert_eq!(
+            base.map(big_sigma0),
+            big_sigma0_u32x16(u32x16::from_array(base)).to_array()
+        );
+    }
+
+    #[test]
+    fn test_big_sigma1_u32x16() {
+        let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        assert_eq!(
+            base.map(big_sigma1),
+            big_sigma1_u32x16(u32x16::from_array(base)).to_array()
+        );
+    }
+
+    #[test]
+    fn test_ch_left_u32x16() {
+        let x: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let y: [u32; 16] = x
+            .into_iter()
+            .rev()
+            .collect::<Vec<u32>>()
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            izip!(x, y)
+                .map(|(_x, _y)| ch_left(_x, _y))
+                .collect::<Vec<u32>>(),
+            ch_left_u32x16(u32x16::from_array(x), u32x16::from_array(y)).to_array()
+        );
+    }
+
+    #[test]
+    fn test_ch_right_u32x16() {
+        let x: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let y: [u32; 16] = x
+            .into_iter()
+            .rev()
+            .collect::<Vec<u32>>()
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            izip!(x, y)
+                .map(|(_x, _y)| ch_right(_x, _y))
+                .collect::<Vec<u32>>(),
+            ch_right_u32x16(u32x16::from_array(x), u32x16::from_array(y)).to_array()
+        );
+    }
 }
