@@ -235,6 +235,18 @@ def get_split(*params):
     return I0, I1, O0, O1, O2
 
 
+def pext(x, mask):
+    out = 0
+    bb = 1
+    while mask != 0:
+        ls = mask & (2**32 - mask)
+        if x & ls != 0:
+            out |= bb
+        mask ^= ls
+        bb <<= 1
+    return out
+
+
 # %% Scheduling
 
 #' Then, for each partition I0 and I1, we evaluate how it propagates through the sigma functions in terms of output bits.
