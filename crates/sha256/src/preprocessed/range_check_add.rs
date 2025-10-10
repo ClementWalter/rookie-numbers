@@ -15,6 +15,7 @@ const N_COLUMNS: usize = 4;
 relation!(Relation, 3);
 /// Lookup data for the range check u32_add function with various carries. It's a RangeCheck16
 /// with different carries as adding n terms creates a carry up to n - 1.
+#[derive(Debug, Clone)]
 pub struct LookupData {
     pub add: [BaseColumn; 2], // [value, carry]
 }
