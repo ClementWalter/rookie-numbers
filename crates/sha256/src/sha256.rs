@@ -60,6 +60,48 @@ pub fn maj_u32x16(a: u32x16, b: u32x16, c: u32x16) -> u32x16 {
     (a & b) ^ (a & c) ^ (b & c)
 }
 
+#[inline(always)]
+pub fn process_chunk_u32x16(chunk: [u32x16; 16], mut hash: [u32x16; 8]) -> [u32x16; 8] {
+    let mut w: [u32x16; 64] = [u32x16::splat(0); 64];
+    w[..16].copy_from_slice(&chunk);
+
+    // Schedule
+    for t in 16..64 {
+        w[t] = w[t - 16] + small_sigma0_u32x16(w[t - 15]) + w[t - 7] + small_sigma1_u32x16(w[t - 2])
+    }
+
+    // Compression
+    let mut a = hash[0];
+    let mut b = hash[1];
+    let mut c = hash[2];
+    let mut d = hash[3];
+    let mut e = hash[4];
+    let mut f = hash[5];
+    let mut g = hash[6];
+    let mut h = hash[7];
+    for &wt in w.iter() {
+        let temp1 = h + big_sigma1_u32x16(e) + ch_left_u32x16(e, f) + ch_right_u32x16(e, g) + wt;
+        let temp2 = big_sigma0_u32x16(a) + maj_u32x16(a, b, c);
+        h = g;
+        g = f;
+        f = e;
+        e = d + temp1;
+        d = c;
+        c = b;
+        b = a;
+        a = temp1 + temp2;
+    }
+    hash[0] += a;
+    hash[1] += b;
+    hash[2] += c;
+    hash[3] += d;
+    hash[4] += e;
+    hash[5] += f;
+    hash[6] += g;
+    hash[7] += h;
+    hash
+}
+
 pub const fn small_sigma0(x: u32) -> u32 {
     x.rotate_right(7) ^ x.rotate_right(18) ^ (x >> 3)
 }
@@ -213,5 +255,24 @@ mod tests {
                 .collect::<Vec<u32>>(),
             ch_right_u32x16(u32x16::from_array(x), u32x16::from_array(y)).to_array()
         );
+    }
+
+    #[test]
+    fn test_process_chunk_u32x16() {
+        let data: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let chunk: [u32x16; 16] = std::array::from_fn(|_| u32x16::from_array(data));
+        // First chunk is 1, 1, ..., 1
+        // Second chunk is 2, 2, ..., 2
+        // ...
+        // Last chunk is 16, 16, ..., 16
+        let chunk_array: [[u32; 16]; 16] =
+            std::array::from_fn(|i| std::array::from_fn(|_| data[i]));
+        let hash: [u32x16; 8] = std::array::from_fn(|i| u32x16::splat(H[i]));
+        let hash_array: [[u32; 8]; 16] = std::array::from_fn(|_| H);
+        let result = process_chunk_u32x16(chunk, hash);
+        let result = std::array::from_fn(|i| std::array::from_fn(|j| result[j].to_array()[i]));
+        let expected: [[u32; 8]; 16] =
+            std::array::from_fn(|i| process_chunk(chunk_array[i], hash_array[i]));
+        assert_eq!(result, expected);
     }
 }
