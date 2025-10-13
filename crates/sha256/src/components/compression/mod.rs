@@ -37,7 +37,7 @@ const COL_PER_ROUND: usize =
     BIG_SIGMA1_COLUMNS + CH_COLUMNS + BIG_SIGMA0_COLUMNS + MAJ_COLUMNS + CARRIES_COLUMNS;
 const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 2 * 6;
 pub const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
-const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
+pub const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
 use columns::RoundColumnsIndex;
 
@@ -552,7 +552,7 @@ mod tests {
         let (schedule, _) = gen_schedule(log_size);
         let (trace, _) = gen_trace(&schedule);
         let chunk = trace[0..CHUNK_SIZE]
-            .into_iter()
+            .iter()
             .map(|eval| {
                 eval.data
                     .clone()

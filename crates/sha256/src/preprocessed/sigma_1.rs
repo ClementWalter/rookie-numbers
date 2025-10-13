@@ -2,6 +2,7 @@ use itertools::Itertools;
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
+use stwo_prover::core::channel::Channel;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
@@ -15,7 +16,35 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(Relation, 6);
+relation!(I0, N_I1_COLUMNS);
+relation!(I1, N_I1_COLUMNS);
+relation!(O2, N_O2_COLUMNS);
+
+#[derive(Debug, Clone)]
+pub struct Relation {
+    pub i0: I0,
+    pub i1: I1,
+    pub o2: O2,
+}
+
+impl Relation {
+    pub fn dummy() -> Self {
+        Self {
+            i0: I0::dummy(),
+            i1: I1::dummy(),
+            o2: O2::dummy(),
+        }
+    }
+
+    pub fn draw(channel: &mut impl Channel) -> Self {
+        Self {
+            i0: I0::draw(channel),
+            i1: I1::draw(channel),
+            o2: O2::draw(channel),
+        }
+    }
+}
+
 /// Lookup data for the Sigma1 function.
 /// The sigma1 function is emulated with 3 lookups, one for each partition I0, I1,
 /// and a final lookup for O2 xor.

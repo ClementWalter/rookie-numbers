@@ -32,13 +32,20 @@
 //! - row[368:608] = sigma1 values
 //! - row[608:704] = the carries
 
+use crate::components::scheduling::columns::{
+    InteractionColumns, InteractionColumnsIndex, RoundColumns,
+};
 use crate::components::W_SIZE;
 use crate::partitions::{pext_u32x16, Sigma0, Sigma1};
+use crate::relations::Relations;
 use crate::sha256::{small_sigma0_u32x16, small_sigma1_u32x16};
+use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
+use stwo_prover::constraint_framework::Relation;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::m31::{PackedM31, LOG_N_LANES};
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
+use stwo_prover::core::fields::qm31::QM31;
 use stwo_prover::core::poly::circle::CanonicCoset;
 use stwo_prover::core::poly::circle::CircleEvaluation;
 use stwo_prover::core::poly::BitReversedOrder;
@@ -46,17 +53,20 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
+use crate::combine;
 use crate::CHUNK_SIZE;
 use std::simd::u32x16;
+
+mod columns;
 
 const N_ROUNDS: usize = 48;
 const SIGMA0_COLUMNS: usize = 10;
 const SIGMA1_COLUMNS: usize = 10;
 const CARRIES_COLUMNS: usize = 2;
 const COL_PER_ROUND: usize = SIGMA0_COLUMNS + SIGMA1_COLUMNS + CARRIES_COLUMNS;
-const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 4;
+const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 6;
 pub const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
-const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
+pub const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
 #[inline]
 fn generate_simd_sequence_bulk(start: usize, len: usize) -> Vec<u32x16> {
@@ -79,7 +89,7 @@ pub fn gen_trace(
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     Vec<Vec<u32x16>>,
 ) {
-    let _span = span!(Level::INFO, "Generation").entered();
+    let _span = span!(Level::INFO, "Scheduling main trace").entered();
     assert!(log_size >= LOG_N_LANES);
     let simd_size = 1 << (log_size - LOG_N_LANES);
 
@@ -185,7 +195,7 @@ pub fn gen_trace(
             let new_w_low = round_low - (carry_low << 16);
             let new_w_high = round_high + carry_low - (carry_high << 16);
 
-            let trace_values: [u32x16; COL_PER_ROUND] = [
+            let trace_values: RoundColumns<u32x16> = RoundColumns {
                 w_15_i0_low,
                 w_15_i0_high,
                 sigma0_o0_low,
@@ -208,12 +218,12 @@ pub fn gen_trace(
                 sigma1_o2_high,
                 carry_low,
                 carry_high,
-            ];
-            for (i, value) in trace_values.iter().enumerate() {
+            };
+            for (i, value) in trace_values.to_vec().iter().enumerate() {
                 evals[index + i].push(*value);
             }
 
-            let interaction_values: [u32x16; INTERACTION_COL_PER_ROUND] = [
+            let interaction_values: InteractionColumns<u32x16> = InteractionColumns {
                 w_15_i0_low,
                 w_15_i0_high,
                 sigma0_o0_low,
@@ -238,10 +248,12 @@ pub fn gen_trace(
                 sigma1_o21_pext,
                 sigma1_o2_low,
                 sigma1_o2_high,
+                new_w_low,
+                new_w_high,
                 carry_low,
                 carry_high,
-            ];
-            for (i, value) in interaction_values.iter().enumerate() {
+            };
+            for (i, value) in interaction_values.to_vec().iter().enumerate() {
                 lookup_data[interaction_index + i].push(*value);
             }
 
@@ -267,6 +279,136 @@ pub fn gen_trace(
         .collect();
 
     (trace, lookup_data)
+}
+
+pub fn gen_interaction_trace(
+    lookup_data: &[Vec<u32x16>],
+    relations: &Relations,
+) -> (
+    ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    QM31,
+) {
+    let _span = span!(Level::INFO, "Scheduling interaction trace").entered();
+    let simd_size = lookup_data[0].len();
+    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
+
+    for round in 0..N_ROUNDS {
+        let base_index = W_SIZE + round * INTERACTION_COL_PER_ROUND;
+
+        let mut col = interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let sigma_0_i0 = combine!(
+                relations.sigma_0.i0,
+                lookup_data,
+                base_index,
+                vec_row,
+                w_15_i0_low,
+                w_15_i0_high,
+                sigma0_o0_low,
+                sigma0_o0_high,
+                sigma0_o20_pext
+            );
+            let sigma_0_i1 = combine!(
+                relations.sigma_0.i1,
+                lookup_data,
+                base_index,
+                vec_row,
+                w_15_i1_low,
+                w_15_i1_high,
+                sigma0_o1_low,
+                sigma0_o1_high,
+                sigma0_o21_pext
+            );
+            let numerator = sigma_0_i0 + sigma_0_i1;
+            let denom = sigma_0_i0 * sigma_0_i1;
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+
+        let mut col = interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let sigma_0_o2 = combine!(
+                relations.sigma_0.o2,
+                lookup_data,
+                base_index,
+                vec_row,
+                sigma0_o20_pext,
+                sigma0_o21_pext,
+                sigma0_o2_low,
+                sigma0_o2_high
+            );
+            let sigma_1_i0 = combine!(
+                relations.sigma_1.i0,
+                lookup_data,
+                base_index,
+                vec_row,
+                w_2_i0_low,
+                w_2_i0_high,
+                sigma1_o0_low,
+                sigma1_o0_high,
+                sigma1_o20_pext
+            );
+            let numerator = sigma_1_i0 + sigma_0_o2;
+            let denom = sigma_1_i0 * sigma_0_o2;
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+
+        let mut col = interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let sigma_1_i1 = combine!(
+                relations.sigma_1.i1,
+                lookup_data,
+                base_index,
+                vec_row,
+                w_2_i1_low,
+                w_2_i1_high,
+                sigma1_o1_low,
+                sigma1_o1_high,
+                sigma1_o21_pext
+            );
+            let sigma_1_o2 = combine!(
+                relations.sigma_1.o2,
+                lookup_data,
+                base_index,
+                vec_row,
+                sigma1_o20_pext,
+                sigma1_o21_pext,
+                sigma1_o2_low,
+                sigma1_o2_high
+            );
+            let numerator = sigma_1_o2 + sigma_1_i1;
+            let denom = sigma_1_o2 * sigma_1_i1;
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+
+        let mut col = interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let carry_low = combine!(
+                relations.range_check_add,
+                lookup_data,
+                base_index,
+                vec_row,
+                new_w_low,
+                carry_low,
+            );
+            let carry_high = combine!(
+                relations.range_check_add,
+                lookup_data,
+                base_index,
+                vec_row,
+                new_w_high,
+                carry_high
+            );
+            let numerator = carry_low + carry_high;
+            let denom = carry_low * carry_high;
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+    }
+
+    interaction_trace.finalize_last()
 }
 
 #[cfg(test)]

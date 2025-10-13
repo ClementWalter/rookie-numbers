@@ -6,30 +6,25 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
-use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::EvalAtRow;
 use stwo_prover::constraint_framework::FrameworkComponent;
 use stwo_prover::constraint_framework::FrameworkEval;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::channel::Blake2sChannel;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::fields::qm31::SecureField;
 use stwo_prover::core::pcs::{CommitmentSchemeProver, PcsConfig};
-use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation, PolyOps};
-use stwo_prover::core::poly::BitReversedOrder;
+use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
 use stwo_prover::core::prover::{prove, StarkProof};
 use stwo_prover::core::vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
-use stwo_prover::core::ColumnVec;
 
+use crate::components::gen_interaction_trace;
 use crate::components::gen_trace;
 use crate::preprocessed::PreProcessedTrace;
-use crate::relations::{LookupData, Relations};
+use crate::relations::Relations;
 
 use tracing::{info, span, Level};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
-const H_SIZE: usize = 16; // 16 u16 = 8 u32
 const LOG_EXPAND: u32 = 1;
 
 pub type Component = FrameworkComponent<Eval>;
@@ -52,24 +47,7 @@ impl FrameworkEval for Eval {
     }
 }
 
-pub fn eval_sha256_constraints<E: EvalAtRow>(_eval: &mut E, _lookup_elements: &Relations) {}
-
-pub fn gen_interaction_trace(
-    log_size: u32,
-    _lookup_data: LookupData,
-    _relations: &Relations,
-) -> (
-    ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    SecureField,
-) {
-    let _span = span!(Level::INFO, "Generate interaction trace").entered();
-
-    let logup_gen = unsafe { LogupTraceGenerator::uninitialized(log_size) };
-
-    // TODO: fill trace
-
-    logup_gen.finalize_last()
-}
+pub const fn eval_sha256_constraints<E: EvalAtRow>(_eval: &mut E, _lookup_elements: &Relations) {}
 
 pub fn prove_sha256(
     log_size: u32,
@@ -110,7 +88,7 @@ pub fn prove_sha256(
 
     // Interaction trace.
     let span = span!(Level::INFO, "Interaction").entered();
-    let (trace, claimed_sum) = gen_interaction_trace(log_size, lookup_data, &relations);
+    let (trace, claimed_sum) = gen_interaction_trace(lookup_data, &relations);
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(trace);
     tree_builder.commit(channel);
@@ -147,8 +125,7 @@ mod tests {
         let (trace0, interaction_data) = gen_trace(LOG_N_ROWS);
 
         let lookup_elements = Relations::dummy();
-        let (trace1, claimed_sum) =
-            gen_interaction_trace(LOG_N_ROWS, interaction_data, &lookup_elements);
+        let (trace1, claimed_sum) = gen_interaction_trace(interaction_data, &lookup_elements);
 
         let traces = TreeVec::new(vec![vec![], trace0, trace1]);
         let trace_polys =

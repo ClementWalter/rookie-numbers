@@ -1,24 +1,4 @@
-macro_rules! round_columns {
-    ($name:ident,$($column:ident),*) => {
-        pub struct $name<T> {
-            $(pub $column: T),*
-        }
-
-        impl<T: Clone + Copy> $name<T> {
-            pub fn to_vec(&self) -> Vec<T> {
-                vec![$(self.$column),*]
-            }
-        }
-
-        paste::paste! {
-            #[allow(dead_code)]
-            #[repr(usize)]
-            pub enum [<$name Index>] {
-                $($column),*
-            }
-        }
-    };
-}
+use crate::round_columns;
 
 round_columns!(
     RoundColumns,
