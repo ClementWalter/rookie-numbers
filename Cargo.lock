@@ -762,6 +762,7 @@ dependencies = [
  "bincode",
  "itertools 0.13.0",
  "num-traits",
+ "paste",
  "serde",
  "serde_json",
  "stwo-prover",

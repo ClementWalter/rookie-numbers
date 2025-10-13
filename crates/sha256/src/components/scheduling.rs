@@ -45,18 +45,18 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
+use crate::CHUNK_SIZE;
 use std::simd::u32x16;
 
+use crate::W_SIZE;
 const N_ROUNDS: usize = 48;
-pub const CHUNK_COLUMNS: usize = 16 * 2;
-pub const W_COLUMNS: usize = CHUNK_COLUMNS + 2 * N_ROUNDS;
 const SIGMA0_COLUMNS: usize = 10;
 const SIGMA1_COLUMNS: usize = 10;
 const CARRIES_COLUMNS: usize = 2;
 const COL_PER_ROUND: usize = SIGMA0_COLUMNS + SIGMA1_COLUMNS + CARRIES_COLUMNS;
 const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 4;
-const N_COLUMNS: usize = W_COLUMNS + COL_PER_ROUND * N_ROUNDS;
-const N_INTERACTION_COLUMNS: usize = W_COLUMNS + INTERACTION_COL_PER_ROUND * N_ROUNDS;
+const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
+const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
 #[inline]
 fn generate_simd_sequence_bulk(start: usize, len: usize) -> Vec<u32x16> {
@@ -95,21 +95,21 @@ pub fn gen_trace(
     evals
         .iter_mut()
         .enumerate()
-        .take(CHUNK_COLUMNS)
+        .take(CHUNK_SIZE)
         .for_each(|(i, eval)| {
             *eval = generate_simd_sequence_bulk(i, 1 << log_size);
         });
     lookup_data
         .iter_mut()
         .enumerate()
-        .take(CHUNK_COLUMNS)
+        .take(CHUNK_SIZE)
         .for_each(|(i, eval)| {
             *eval = generate_simd_sequence_bulk(i, 1 << log_size);
         });
 
     for t in 16..64 {
-        let index = W_COLUMNS + (t - 16) * COL_PER_ROUND;
-        let interaction_index = W_COLUMNS + (t - 16) * INTERACTION_COL_PER_ROUND;
+        let index = W_SIZE + (t - 16) * COL_PER_ROUND;
+        let interaction_index = W_SIZE + (t - 16) * INTERACTION_COL_PER_ROUND;
         for simd_row in 0..simd_size {
             // Load the W values
             let w_16_low = evals[2 * (t - 16)][simd_row];
@@ -298,7 +298,7 @@ mod tests {
         let size = 1 << log_size;
         let (mut trace, _) = gen_trace(log_size);
         let w = trace
-            .drain(0..W_COLUMNS)
+            .drain(0..W_SIZE)
             .map(|eval| {
                 eval.values
                     .to_cpu()

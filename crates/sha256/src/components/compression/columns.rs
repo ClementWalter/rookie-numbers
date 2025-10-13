@@ -1,0 +1,150 @@
+macro_rules! round_columns {
+    ($name:ident,$($column:ident),*) => {
+        pub struct $name<T> {
+            $(pub $column: T),*
+        }
+
+        impl<T: Clone + Copy> $name<T> {
+            pub fn to_vec(&self) -> Vec<T> {
+                vec![$(self.$column),*]
+            }
+        }
+
+        paste::paste! {
+            #[allow(dead_code)]
+            #[repr(usize)]
+            pub enum [<$name Index>] {
+                $($column),*
+            }
+        }
+    };
+}
+
+round_columns!(
+    RoundColumns,
+    e_i0_low,
+    e_i0_high,
+    sigma1_o0_low,
+    sigma1_o0_high,
+    sigma1_o20_pext,
+    sigma1_o1_low,
+    sigma1_o1_high,
+    sigma1_o21_pext,
+    sigma1_o2_low,
+    sigma1_o2_high,
+    f_i0_low,
+    f_i0_high,
+    ch_left_i0_l,
+    ch_left_i0_h,
+    ch_left_i1_l,
+    ch_left_i1_h,
+    g_i0_low,
+    g_i0_high,
+    ch_right_i0_l,
+    ch_right_i0_h,
+    ch_right_i1_l,
+    ch_right_i1_h,
+    a_i0_high_0,
+    a_i0_high_1,
+    a_i1_low_0,
+    a_i1_low_1,
+    sigma0_o0_low,
+    sigma0_o0_high,
+    sigma0_o20_pext,
+    sigma0_o1_low,
+    sigma0_o1_high,
+    sigma0_o21_pext,
+    sigma0_o2_low,
+    sigma0_o2_high,
+    b_i0_high_0,
+    b_i0_high_1,
+    b_i1_low_0,
+    b_i1_low_1,
+    c_i0_high_0,
+    c_i0_high_1,
+    c_i1_low_0,
+    c_i1_low_1,
+    maj_i0_low,
+    maj_i0_high_0,
+    maj_i0_high_1,
+    maj_i1_low_0,
+    maj_i1_low_1,
+    maj_i1_high,
+    e_carry_low,
+    e_carry_high,
+    a_carry_low,
+    a_carry_high
+);
+
+round_columns!(
+    InteractionColumns,
+    // BIG_SIGMA1
+    e_i0_low,
+    e_i0_high,
+    sigma1_o0_low,
+    sigma1_o0_high,
+    sigma1_o20_pext,
+    e_i1_low,
+    e_i1_high,
+    sigma1_o1_low,
+    sigma1_o1_high,
+    sigma1_o21_pext,
+    sigma1_o2_low,
+    sigma1_o2_high,
+    // CH
+    f_i0_low,
+    f_i0_high,
+    f_i1_low,
+    f_i1_high,
+    ch_left_i0_l,
+    ch_left_i0_h,
+    ch_left_i1_l,
+    ch_left_i1_h,
+    g_i0_low,
+    g_i0_high,
+    g_i1_low,
+    g_i1_high,
+    ch_right_i0_l,
+    ch_right_i0_h,
+    ch_right_i1_l,
+    ch_right_i1_h,
+    // BIG_SIGMA0
+    a_i0_low,
+    a_i0_high_0,
+    a_i0_high_1,
+    a_i1_low_0,
+    a_i1_low_1,
+    a_i1_high,
+    sigma0_o0_low,
+    sigma0_o0_high,
+    sigma0_o20_pext,
+    sigma0_o1_low,
+    sigma0_o1_high,
+    sigma0_o21_pext,
+    sigma0_o2_low,
+    sigma0_o2_high,
+    // MAJ
+    b_i0_low,
+    b_i0_high_0,
+    b_i0_high_1,
+    b_i1_low_0,
+    b_i1_low_1,
+    b_i1_high,
+    c_i0_low,
+    c_i0_high_0,
+    c_i0_high_1,
+    c_i1_low_0,
+    c_i1_low_1,
+    c_i1_high,
+    maj_i0_low,
+    maj_i0_high_0,
+    maj_i0_high_1,
+    maj_i1_low_0,
+    maj_i1_low_1,
+    maj_i1_high,
+    // ADD
+    e_carry_low,
+    e_carry_high,
+    a_carry_low,
+    a_carry_high
+);

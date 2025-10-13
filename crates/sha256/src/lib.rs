@@ -32,7 +32,8 @@ use crate::relations::{LookupData, Relations};
 use tracing::{info, span, Level};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
-const H_SIZE: usize = 16; // 8 u32 = 16 u16
+const W_SIZE: usize = 128; // 128 u16 = 64 u32
+const H_SIZE: usize = 16; // 16 u16 = 8 u32
 const LOG_EXPAND: u32 = 1;
 const N_COLUMNS: usize = 4256;
 
