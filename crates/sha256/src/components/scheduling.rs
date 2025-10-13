@@ -32,6 +32,7 @@
 //! - row[368:608] = sigma1 values
 //! - row[608:704] = the carries
 
+use crate::components::W_SIZE;
 use crate::partitions::{pext_u32x16, Sigma0, Sigma1};
 use crate::sha256::{small_sigma0_u32x16, small_sigma1_u32x16};
 use stwo_prover::core::backend::simd::column::BaseColumn;
@@ -48,14 +49,13 @@ use tracing::Level;
 use crate::CHUNK_SIZE;
 use std::simd::u32x16;
 
-use crate::W_SIZE;
 const N_ROUNDS: usize = 48;
 const SIGMA0_COLUMNS: usize = 10;
 const SIGMA1_COLUMNS: usize = 10;
 const CARRIES_COLUMNS: usize = 2;
 const COL_PER_ROUND: usize = SIGMA0_COLUMNS + SIGMA1_COLUMNS + CARRIES_COLUMNS;
 const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 4;
-const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
+pub const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
 const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
 #[inline]

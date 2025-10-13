@@ -20,7 +20,7 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
-use crate::W_SIZE;
+use crate::components::W_SIZE;
 use std::simd::u32x16;
 
 mod columns;
@@ -36,10 +36,10 @@ const CARRIES_COLUMNS: usize = 4;
 const COL_PER_ROUND: usize =
     BIG_SIGMA1_COLUMNS + CH_COLUMNS + BIG_SIGMA0_COLUMNS + MAJ_COLUMNS + CARRIES_COLUMNS;
 const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 2 * 6;
-const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
+pub const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
 const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
-use columns::{RoundColumnsIndex};
+use columns::RoundColumnsIndex;
 
 #[inline(always)]
 const fn trace_index(round: usize, column: RoundColumnsIndex) -> usize {
@@ -48,13 +48,13 @@ const fn trace_index(round: usize, column: RoundColumnsIndex) -> usize {
 
 #[allow(clippy::type_complexity)]
 pub fn gen_trace(
-    w: &[Vec<u32x16>],
+    w: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     Vec<Vec<u32x16>>,
 ) {
     let _span = span!(Level::INFO, "Generation").entered();
-    let simd_size = w[0].len();
+    let simd_size = w[0].data.len();
 
     // Initialize vec for all groups of columns
     let mut evals: Vec<Vec<u32x16>> = (0..N_COLUMNS)
@@ -91,14 +91,24 @@ pub fn gen_trace(
         .enumerate()
         .take(W_SIZE)
         .for_each(|(i, eval)| {
-            *eval = w[i].clone();
+            *eval = w[i]
+                .data
+                .clone()
+                .into_iter()
+                .map(|x| x.into_simd())
+                .collect();
         });
     lookup_data
         .iter_mut()
         .enumerate()
         .take(W_SIZE)
         .for_each(|(i, eval)| {
-            *eval = w[i].clone();
+            *eval = w[i]
+                .data
+                .clone()
+                .into_iter()
+                .map(|x| x.into_simd())
+                .collect();
         });
 
     for round in 0..64 {
@@ -127,7 +137,6 @@ pub fn gen_trace(
         let k_high = k[2 * round + 1];
 
         for simd_row in 0..simd_size {
-
             // Load W value
             let w_low = evals[2 * round][simd_row];
             let w_high = evals[2 * round + 1][simd_row];
@@ -524,9 +533,6 @@ fn update_hash_buffer(hash_buffer: &mut [Vec<u32x16>], evals: &[Vec<u32x16>], ro
 }
 #[cfg(test)]
 mod tests {
-
-    use std::simd::Simd;
-
     use crate::{
         components::scheduling::gen_trace as gen_schedule, sha256::process_chunk_u32x16, CHUNK_SIZE,
     };
@@ -535,30 +541,27 @@ mod tests {
 
     #[test]
     fn test_gen_trace_columns_count() {
-        let w = vec![vec![u32x16::splat(0); LOG_N_LANES as usize]; W_SIZE];
-        let (trace, _) = gen_trace(&w);
+        let (schedule, _) = gen_schedule(LOG_N_LANES);
+        let (trace, _) = gen_trace(&schedule);
         assert_eq!(trace.len(), N_COLUMNS);
     }
 
     #[test]
     fn test_gen_trace_values() {
         let log_size = LOG_N_LANES;
-        let (mut schedule, _) = gen_schedule(log_size);
-        let schedule: [Vec<u32x16>; W_SIZE] = schedule
-            .drain(0..W_SIZE)
+        let (schedule, _) = gen_schedule(log_size);
+        let (trace, _) = gen_trace(&schedule);
+        let chunk = trace[0..CHUNK_SIZE]
+            .into_iter()
             .map(|eval| {
                 eval.data
                     .clone()
                     .into_iter()
                     .map(|x| x.into_simd())
-                    .collect()
+                    .collect::<Vec<u32x16>>()
             })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let (trace, _) = gen_trace(&schedule);
-        let chunk: &[Vec<Simd<u32, 16>>; CHUNK_SIZE] = schedule[0..CHUNK_SIZE].try_into().unwrap();
-        let chunk = std::array::from_fn(|i| chunk[2*i][0] + (chunk[2*i + 1][0] << 16));
+            .collect::<Vec<_>>();
+        let chunk = std::array::from_fn(|i| chunk[2 * i][0] + (chunk[2 * i + 1][0] << 16));
         let h = std::array::from_fn(|i| u32x16::splat(H[i]));
         let expected = process_chunk_u32x16(chunk, h);
 
@@ -587,7 +590,7 @@ mod tests {
         }
 
         let result: [u32x16; 8] = std::array::from_fn(|i| {
-            hash_buffer[2*i][0] + (hash_buffer[2*i + 1][0] << 16) + u32x16::splat(H[i])
+            hash_buffer[2 * i][0] + (hash_buffer[2 * i + 1][0] << 16) + u32x16::splat(H[i])
         });
 
         assert_eq!(result, expected);

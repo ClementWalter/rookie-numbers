@@ -80,7 +80,12 @@ pub fn process_chunk_u32x16(chunk: [u32x16; 16], mut hash: [u32x16; 8]) -> [u32x
     let mut g = hash[6];
     let mut h = hash[7];
     for round in 0..64 {
-        let temp1 = h + big_sigma1_u32x16(e) + ch_left_u32x16(e, f) + ch_right_u32x16(e, g) + u32x16::splat(K[round]) + w[round];
+        let temp1 = h
+            + big_sigma1_u32x16(e)
+            + ch_left_u32x16(e, f)
+            + ch_right_u32x16(e, g)
+            + u32x16::splat(K[round])
+            + w[round];
         let temp2 = big_sigma0_u32x16(a) + maj_u32x16(a, b, c);
         h = g;
         g = f;

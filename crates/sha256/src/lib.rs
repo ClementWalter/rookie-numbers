@@ -6,16 +6,12 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
-use itertools::Itertools;
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::EvalAtRow;
 use stwo_prover::constraint_framework::FrameworkComponent;
 use stwo_prover::constraint_framework::FrameworkEval;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
-use stwo_prover::core::backend::simd::m31::LOG_N_LANES;
 use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::backend::Col;
-use stwo_prover::core::backend::Column;
 use stwo_prover::core::channel::Blake2sChannel;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::fields::qm31::SecureField;
@@ -26,16 +22,15 @@ use stwo_prover::core::prover::{prove, StarkProof};
 use stwo_prover::core::vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
 use stwo_prover::core::ColumnVec;
 
+use crate::components::gen_trace;
 use crate::preprocessed::PreProcessedTrace;
 use crate::relations::{LookupData, Relations};
 
 use tracing::{info, span, Level};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
-const W_SIZE: usize = 128; // 128 u16 = 64 u32
 const H_SIZE: usize = 16; // 16 u16 = 8 u32
 const LOG_EXPAND: u32 = 1;
-const N_COLUMNS: usize = 4256;
 
 pub type Component = FrameworkComponent<Eval>;
 
@@ -58,30 +53,6 @@ impl FrameworkEval for Eval {
 }
 
 pub fn eval_sha256_constraints<E: EvalAtRow>(_eval: &mut E, _lookup_elements: &Relations) {}
-
-pub fn gen_trace(
-    log_size: u32,
-) -> (
-    ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    LookupData,
-) {
-    let _span = span!(Level::INFO, "Generation").entered();
-    assert!(log_size >= LOG_N_LANES);
-
-    let trace = (0..N_COLUMNS)
-        .map(|_| Col::<SimdBackend, BaseField>::zeros(1 << log_size))
-        .collect_vec();
-    let lookup_data = LookupData::new(log_size);
-
-    // TODO: fill trace
-
-    let domain = CanonicCoset::new(log_size).circle_domain();
-    let trace = trace
-        .into_iter()
-        .map(|eval| CircleEvaluation::new(domain, eval))
-        .collect();
-    (trace, lookup_data)
-}
 
 pub fn gen_interaction_trace(
     log_size: u32,
@@ -162,6 +133,7 @@ pub fn prove_sha256(
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
     use stwo_prover::{constraint_framework::assert_constraints_on_polys, core::pcs::TreeVec};
 
     use super::*;
