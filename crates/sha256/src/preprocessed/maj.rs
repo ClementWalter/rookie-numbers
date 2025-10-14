@@ -272,6 +272,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::cognitive_complexity)]
     #[test]
     fn test_gen_column_simd() {
         let columns = Columns.gen_column_simd();
