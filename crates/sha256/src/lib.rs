@@ -6,8 +6,6 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
-use stwo_prover::constraint_framework::EvalAtRow;
-use stwo_prover::constraint_framework::FrameworkEval;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::channel::Blake2sChannel;
@@ -24,33 +22,12 @@ use crate::relations::Relations;
 use tracing::{info, span, Level};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
-const LOG_EXPAND: u32 = 1;
-
-#[derive(Clone)]
-pub struct Eval {
-    pub log_size: u32,
-    pub relations: Relations,
-}
-impl FrameworkEval for Eval {
-    fn log_size(&self) -> u32 {
-        self.log_size
-    }
-    fn max_constraint_log_degree_bound(&self) -> u32 {
-        self.log_size() + LOG_EXPAND
-    }
-    fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
-        eval_sha256_constraints(&mut eval, &self.relations);
-        eval
-    }
-}
-
-pub const fn eval_sha256_constraints<E: EvalAtRow>(_eval: &mut E, _lookup_elements: &Relations) {}
 
 pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkleHasher> {
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     let twiddles = SimdBackend::precompute_twiddles(
-        CanonicCoset::new(log_size + LOG_EXPAND + config.fri_config.log_blowup_factor)
+        CanonicCoset::new(21 + 1 + config.fri_config.log_blowup_factor)
             .circle_domain()
             .half_coset,
     );
@@ -89,8 +66,10 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     span.exit();
 
     // Prove constraints.
+    let trace_allocator =
+        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
     let scheduling_component = components::scheduling::air::Component::new(
-        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
+        trace_allocator,
         components::scheduling::air::Eval {
             log_size,
             relations: relations.clone(),
@@ -99,7 +78,7 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     );
 
     let compression_component = components::compression::air::Component::new(
-        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
+        trace_allocator,
         components::compression::air::Eval {
             log_size,
             relations,
@@ -114,4 +93,24 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
         commitment_scheme,
     )
     .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prove_sha256() {
+        use std::time::Instant;
+
+        let log_size = 21;
+        let start = Instant::now();
+        prove_sha256(log_size, PcsConfig::default());
+        let duration = start.elapsed();
+        println!("Time spent in prove_sha256: {:?}", duration);
+        println!(
+            "Frequency: {:?}",
+            2_u32.pow(log_size) / duration.as_secs_f32().floor() as u32
+        );
+    }
 }
