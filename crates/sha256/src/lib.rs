@@ -7,7 +7,6 @@ pub mod relations;
 pub mod sha256;
 
 use stwo_prover::constraint_framework::EvalAtRow;
-use stwo_prover::constraint_framework::FrameworkComponent;
 use stwo_prover::constraint_framework::FrameworkEval;
 use stwo_prover::constraint_framework::TraceLocationAllocator;
 use stwo_prover::core::backend::simd::SimdBackend;
@@ -26,8 +25,6 @@ use tracing::{info, span, Level};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
 const LOG_EXPAND: u32 = 1;
-
-pub type Component = FrameworkComponent<Eval>;
 
 #[derive(Clone)]
 pub struct Eval {
@@ -49,10 +46,7 @@ impl FrameworkEval for Eval {
 
 pub const fn eval_sha256_constraints<E: EvalAtRow>(_eval: &mut E, _lookup_elements: &Relations) {}
 
-pub fn prove_sha256(
-    log_size: u32,
-    config: PcsConfig,
-) -> (Component, StarkProof<Blake2sMerkleHasher>) {
+pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkleHasher> {
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     let twiddles = SimdBackend::precompute_twiddles(
@@ -95,49 +89,15 @@ pub fn prove_sha256(
     span.exit();
 
     // Prove constraints.
-    let component = Component::new(
+    let scheduling_component = components::scheduling::air::Component::new(
         &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
-        Eval {
+        components::scheduling::air::Eval {
             log_size,
             relations,
         },
-        claimed_sum,
+        claimed_sum.scheduling,
     );
-    info!("Poseidon component info:\n{}", component);
-    let proof = prove(&[&component], channel, commitment_scheme).unwrap();
 
-    (component, proof)
-}
-
-#[cfg(test)]
-mod tests {
-    use itertools::Itertools;
-    use stwo_prover::{constraint_framework::assert_constraints_on_polys, core::pcs::TreeVec};
-
-    use super::*;
-
-    #[ignore = "not implemented"]
-    #[test]
-    fn test_sha255_constraints() {
-        const LOG_N_ROWS: u32 = 8;
-
-        // Trace.
-        let (trace0, interaction_data) = gen_trace(LOG_N_ROWS);
-
-        let lookup_elements = Relations::dummy();
-        let (trace1, claimed_sum) = gen_interaction_trace(interaction_data, &lookup_elements);
-
-        let traces = TreeVec::new(vec![vec![], trace0, trace1]);
-        let trace_polys =
-            traces.map(|trace| trace.into_iter().map(|c| c.interpolate()).collect_vec());
-
-        assert_constraints_on_polys(
-            &trace_polys,
-            CanonicCoset::new(LOG_N_ROWS),
-            |mut eval| {
-                eval_sha256_constraints(&mut eval, &lookup_elements);
-            },
-            claimed_sum,
-        );
-    }
+    info!("Scheduling component info:\n{}", scheduling_component);
+    prove(&[&scheduling_component], channel, commitment_scheme).unwrap()
 }

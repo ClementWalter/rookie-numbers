@@ -12,6 +12,11 @@ pub const W_SIZE: usize = 128; // 128 u16 = 64 u32
 pub mod compression;
 pub mod scheduling;
 
+pub struct ClaimedSum {
+    pub scheduling: SecureField,
+    pub compression: SecureField,
+}
+
 pub fn gen_trace(
     log_size: u32,
 ) -> (
@@ -43,7 +48,7 @@ pub fn gen_interaction_trace(
     relations: &Relations,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    SecureField,
+    ClaimedSum,
 ) {
     let _span = span!(Level::INFO, "Generate interaction trace").entered();
 
@@ -52,19 +57,22 @@ pub fn gen_interaction_trace(
             scheduling::witness::N_INTERACTION_COLUMNS
                 + compression::witness::N_INTERACTION_COLUMNS,
         );
-    let mut claimed_sum = SecureField::from_u32_unchecked(0, 0, 0, 0);
 
     let (scheduling_interaction_trace, scheduling_claimed_sum) =
         scheduling::witness::gen_interaction_trace(&lookup_data.scheduling, relations);
     interaction_trace.extend(scheduling_interaction_trace);
-    claimed_sum += scheduling_claimed_sum;
 
     let (compression_interaction_trace, compression_claimed_sum) =
         compression::witness::gen_interaction_trace(&lookup_data.compression, relations);
     interaction_trace.extend(compression_interaction_trace);
-    claimed_sum += compression_claimed_sum;
 
-    (interaction_trace, claimed_sum)
+    (
+        interaction_trace,
+        ClaimedSum {
+            scheduling: scheduling_claimed_sum,
+            compression: compression_claimed_sum,
+        },
+    )
 }
 
 #[macro_export]
@@ -77,6 +85,18 @@ macro_rules! round_columns {
         impl<T: Clone + Copy> $name<T> {
             pub fn to_vec(&self) -> Vec<T> {
                 vec![$(self.$column),*]
+            }
+        }
+
+        #[allow(dead_code)]
+        impl<T> $name<T> {
+            pub fn from_eval<E>(eval: &mut E) -> Self
+            where
+                E: stwo_prover::constraint_framework::EvalAtRow<F = T>,
+            {
+                Self {
+                    $($column: eval.next_trace_mask(),)*
+                }
             }
         }
 
@@ -127,4 +147,15 @@ macro_rules! write_col {
         }
         col.finalize_col();
     };
+}
+
+#[macro_export]
+macro_rules! add_to_relation {
+    ($eval:expr, $relation:expr, $numerator:expr, $($col:expr),+ $(,)?) => {{
+        $eval.add_to_relation(stwo_prover::constraint_framework::RelationEntry::new(
+            &$relation,
+            $numerator.clone(),
+            &[$($col.clone()),*],
+        ))
+    }};
 }

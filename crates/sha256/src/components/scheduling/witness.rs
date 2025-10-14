@@ -1,6 +1,6 @@
 //! The scheduling component is responsible for proving the scheduling part of sha256.
 //!
-//! This is, 48 iterations of the main loop, doing sigma_0, sigma1 and adding the
+//! This is, 48 iterations of the main loop, doing sigma_0, sigma_1 and adding the
 //! results with some previous W values to the current W value.
 //! The W array is actually write-once in the sense that no value is updated.
 //! For the AIR, we just need to define an encoding for a row
@@ -16,10 +16,10 @@
 //!
 //! - row[128:(128 + 240)] = sigma_0 values
 //!
-//! For sigma1, only indexes from 14..=61 are used. Each operation requires
+//! For sigma_1, only indexes from 14..=61 are used. Each operation requires
 //! to hint the decomposition over I0 and the 3 output values, so 5 columns, or 5*48=240 columns.
 //!
-//! - row[(128 + 240):(128 + 2*240)] = sigma1 values
+//! - row[(128 + 240):(128 + 2*240)] = sigma_1 values
 //!
 //! The final addition at each iteration requires to hint the 2 carries. There are 48 iterations,
 //! so 2*48=96 columns.
@@ -29,7 +29,7 @@
 //! In short, the main trace of the AIR is then defined as follows:
 //! - row[0: 128] = W
 //! - row[128:368] = sigma_0 values
-//! - row[368:608] = sigma1 values
+//! - row[368:608] = sigma_1 values
 //! - row[608:704] = the carries
 
 use super::columns::{InteractionColumns, InteractionColumnsIndex, RoundColumns};
@@ -159,33 +159,33 @@ pub fn gen_trace(
             // Decomposition over I0
             let w_2_i0_low = w_2_low & u32x16::splat(Sigma1::I0_L);
             let w_2_i0_high = w_2_high & u32x16::splat(Sigma1::I0_H);
-            let sigma1 = small_sigma1_u32x16(w_2_i0_low + (w_2_i0_high << 16));
-            let sigma1_o0_low = sigma1 & u32x16::splat(Sigma1::O0_L);
-            let sigma1_o0_high = (sigma1 >> 16) & u32x16::splat(Sigma1::O0_H);
-            let sigma1_o20 = sigma1 & u32x16::splat(Sigma1::O2);
-            let sigma1_o20_pext = pext_u32x16(sigma1_o20, Sigma1::O2);
+            let sigma_1 = small_sigma1_u32x16(w_2_i0_low + (w_2_i0_high << 16));
+            let sigma_1_o0_low = sigma_1 & u32x16::splat(Sigma1::O0_L);
+            let sigma_1_o0_high = (sigma_1 >> 16) & u32x16::splat(Sigma1::O0_H);
+            let sigma_1_o20 = sigma_1 & u32x16::splat(Sigma1::O2);
+            let sigma_1_o20_pext = pext_u32x16(sigma_1_o20, Sigma1::O2);
 
             // Decomposition over I1
             let w_2_i1_low = w_2_low & u32x16::splat(Sigma1::I1_L);
             let w_2_i1_high = w_2_high & u32x16::splat(Sigma1::I1_H);
-            let sigma1 = small_sigma1_u32x16(w_2_i1_low + (w_2_i1_high << 16));
-            let sigma1_o1_low = sigma1 & u32x16::splat(Sigma1::O1_L);
-            let sigma1_o1_high = (sigma1 >> 16) & u32x16::splat(Sigma1::O1_H);
-            let sigma1_o21 = sigma1 & u32x16::splat(Sigma1::O2);
-            let sigma1_o21_pext = pext_u32x16(sigma1_o21, Sigma1::O2);
+            let sigma_1 = small_sigma1_u32x16(w_2_i1_low + (w_2_i1_high << 16));
+            let sigma_1_o1_low = sigma_1 & u32x16::splat(Sigma1::O1_L);
+            let sigma_1_o1_high = (sigma_1 >> 16) & u32x16::splat(Sigma1::O1_H);
+            let sigma_1_o21 = sigma_1 & u32x16::splat(Sigma1::O2);
+            let sigma_1_o21_pext = pext_u32x16(sigma_1_o21, Sigma1::O2);
 
             // XOR the two O2 values
-            let sigma1_o2 = sigma1_o20 ^ sigma1_o21;
-            let sigma1_o2_low = sigma1_o2 & u32x16::splat(0xffff);
-            let sigma1_o2_high = sigma1_o2 >> 16;
+            let sigma_1_o2 = sigma_1_o20 ^ sigma_1_o21;
+            let sigma_1_o2_low = sigma_1_o2 & u32x16::splat(0xffff);
+            let sigma_1_o2_high = sigma_1_o2 >> 16;
 
-            // Compute sigma1 output
-            let sigma1_low = sigma1_o0_low + sigma1_o1_low + sigma1_o2_low;
-            let sigma1_high = sigma1_o0_high + sigma1_o1_high + sigma1_o2_high;
+            // Compute sigma_1 output
+            let sigma_1_low = sigma_1_o0_low + sigma_1_o1_low + sigma_1_o2_low;
+            let sigma_1_high = sigma_1_o0_high + sigma_1_o1_high + sigma_1_o2_high;
 
             // Compute the final output
-            let round_low = w_16_low + sigma_0_low + w_7_low + sigma1_low;
-            let round_high = w_16_high + sigma_0_high + w_7_high + sigma1_high;
+            let round_low = w_16_low + sigma_0_low + w_7_low + sigma_1_low;
+            let round_high = w_16_high + sigma_0_high + w_7_high + sigma_1_high;
             let carry_low = round_low >> 16;
             let carry_high = (round_high + carry_low) >> 16;
             let new_w_low = round_low - (carry_low << 16);
@@ -204,14 +204,14 @@ pub fn gen_trace(
                 sigma_0_o2_high,
                 w_2_i0_low,
                 w_2_i0_high,
-                sigma1_o0_low,
-                sigma1_o0_high,
-                sigma1_o20_pext,
-                sigma1_o1_low,
-                sigma1_o1_high,
-                sigma1_o21_pext,
-                sigma1_o2_low,
-                sigma1_o2_high,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high,
                 carry_low,
                 carry_high,
             };
@@ -234,16 +234,16 @@ pub fn gen_trace(
                 sigma_0_o2_high,
                 w_2_i0_low,
                 w_2_i0_high,
-                sigma1_o0_low,
-                sigma1_o0_high,
-                sigma1_o20_pext,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext,
                 w_2_i1_low,
                 w_2_i1_high,
-                sigma1_o1_low,
-                sigma1_o1_high,
-                sigma1_o21_pext,
-                sigma1_o2_low,
-                sigma1_o2_high,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high,
                 new_w_low,
                 new_w_high,
                 carry_low,
@@ -328,9 +328,9 @@ pub fn gen_interaction_trace(
             base_index,
             w_2_i0_low,
             w_2_i0_high,
-            sigma1_o0_low,
-            sigma1_o0_high,
-            sigma1_o20_pext
+            sigma_1_o0_low,
+            sigma_1_o0_high,
+            sigma_1_o20_pext
         );
         let sigma_1_i1 = combine!(
             relations.sigma_1.i1,
@@ -338,18 +338,18 @@ pub fn gen_interaction_trace(
             base_index,
             w_2_i1_low,
             w_2_i1_high,
-            sigma1_o1_low,
-            sigma1_o1_high,
-            sigma1_o21_pext
+            sigma_1_o1_low,
+            sigma_1_o1_high,
+            sigma_1_o21_pext
         );
         let sigma_1_o2 = combine!(
             relations.sigma_1.o2,
             lookup_data,
             base_index,
-            sigma1_o20_pext,
-            sigma1_o21_pext,
-            sigma1_o2_low,
-            sigma1_o2_high
+            sigma_1_o20_pext,
+            sigma_1_o21_pext,
+            sigma_1_o2_low,
+            sigma_1_o2_high
         );
         // ADD
         let carry_low = combine!(
