@@ -389,6 +389,12 @@ fn eval_compression_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relation
         hash_buffer[14] = g_low.clone(); // h_low
         hash_buffer[15] = g_high.clone(); // h_high
     }
+    eval.add_to_relation(stwo_prover::constraint_framework::RelationEntry::new(
+        &relations.w,
+        -one,
+        &w,
+    ));
+
     eval.finalize_logup_in_pairs();
 }
 

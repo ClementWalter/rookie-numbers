@@ -37,10 +37,12 @@ use crate::components::W_SIZE;
 use crate::partitions::{pext_u32x16, Sigma0, Sigma1};
 use crate::relations::Relations;
 use crate::sha256::{small_sigma1_u32x16, small_sigma_0_u32x16};
+use num_traits::One;
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::Relation;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::m31::{PackedM31, LOG_N_LANES};
+use stwo_prover::core::backend::simd::qm31::PackedQM31;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::fields::qm31::QM31;
@@ -51,6 +53,7 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
+use crate::components::combine_w;
 use crate::CHUNK_SIZE;
 use crate::{combine, write_col};
 use std::simd::u32x16;
@@ -255,6 +258,8 @@ pub fn gen_trace(
 
             evals[2 * t].push(new_w_low);
             evals[2 * t + 1].push(new_w_high);
+            lookup_data[2 * t].push(new_w_low);
+            lookup_data[2 * t + 1].push(new_w_high);
         }
     }
 
@@ -379,6 +384,14 @@ pub fn gen_interaction_trace(
             );
         }
     }
+
+    let w = combine_w(relations, lookup_data);
+    let one = PackedQM31::one();
+    let mut col = interaction_trace.new_col();
+    for (vec_row, &denom) in w.iter().enumerate() {
+        col.write_frac(vec_row, one, denom);
+    }
+    col.finalize_col();
 
     interaction_trace.finalize_last()
 }

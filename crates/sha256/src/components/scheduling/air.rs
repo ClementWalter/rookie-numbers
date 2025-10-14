@@ -144,6 +144,13 @@ fn eval_scheduling_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations
             carry_high
         );
     }
+
+    eval.add_to_relation(stwo_prover::constraint_framework::RelationEntry::new(
+        &relations.w,
+        one,
+        &w,
+    ));
+
     eval.finalize_logup_in_pairs();
 }
 

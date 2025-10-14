@@ -1,3 +1,5 @@
+use std::simd::u32x16;
+
 use stwo_prover::core::{
     backend::simd::{m31::LOG_N_LANES, SimdBackend},
     fields::{m31::BaseField, qm31::SecureField},
@@ -134,6 +136,35 @@ macro_rules! combine {
         }
         combined
     }};
+}
+
+#[inline(always)]
+pub fn combine_w(
+    relations: &Relations,
+    data: &[Vec<u32x16>],
+) -> Vec<stwo_prover::core::backend::simd::qm31::PackedQM31> {
+    use crate::components::W_SIZE;
+    use stwo_prover::constraint_framework::Relation;
+
+    let simd_size = data[0].len();
+    let mut combined = Vec::with_capacity(simd_size);
+    for vec_row in 0..simd_size {
+        unsafe {
+            let values: [stwo_prover::core::backend::simd::m31::PackedM31; W_SIZE] = (0..W_SIZE)
+                .map(|i| {
+                    stwo_prover::core::backend::simd::m31::PackedM31::from_simd_unchecked(
+                        data[i][vec_row],
+                    )
+                })
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+            let denom: stwo_prover::core::backend::simd::qm31::PackedQM31 =
+                relations.w.combine(&values);
+            combined.push(denom);
+        }
+    }
+    combined
 }
 
 #[macro_export]

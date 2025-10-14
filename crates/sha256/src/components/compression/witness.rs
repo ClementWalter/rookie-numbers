@@ -13,10 +13,12 @@ use crate::sha256::{
 };
 use crate::{combine, write_col};
 use itertools::izip;
+use num_traits::One;
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::Relation;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::m31::{PackedM31, LOG_N_LANES};
+use stwo_prover::core::backend::simd::qm31::PackedQM31;
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::fields::qm31::QM31;
@@ -27,7 +29,7 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
-use crate::components::W_SIZE;
+use crate::components::{combine_w, W_SIZE};
 use std::simd::u32x16;
 
 const N_ROUNDS: usize = 64;
@@ -817,6 +819,14 @@ pub fn gen_interaction_trace(
             );
         }
     }
+
+    let w = combine_w(relations, lookup_data);
+    let one = PackedQM31::one();
+    let mut col = interaction_trace.new_col();
+    for (vec_row, &denom) in w.iter().enumerate() {
+        col.write_frac(vec_row, -one, denom);
+    }
+    col.finalize_col();
 
     interaction_trace.finalize_last()
 }

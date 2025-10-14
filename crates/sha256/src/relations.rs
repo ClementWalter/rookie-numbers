@@ -19,6 +19,12 @@ use crate::preprocessed::{
     big_sigma_0, big_sigma_1, ch_left, ch_right, maj, range_check_add, sigma_0, sigma_1,
 };
 
+mod w {
+    use crate::components::W_SIZE;
+    use stwo_prover::relation;
+    relation!(Relation, W_SIZE);
+}
+
 #[derive(Clone)]
 pub struct Relations {
     pub sigma_0: sigma_0::Relation,
@@ -29,6 +35,7 @@ pub struct Relations {
     pub ch_right: ch_right::Relation,
     pub maj: maj::Relation,
     pub range_check_add: range_check_add::Relation,
+    pub w: w::Relation,
 }
 
 impl Relations {
@@ -42,6 +49,7 @@ impl Relations {
             ch_right: ch_right::Relation::draw(channel),
             maj: maj::Relation::draw(channel),
             range_check_add: range_check_add::Relation::draw(channel),
+            w: w::Relation::draw(channel),
         }
     }
 
@@ -55,6 +63,7 @@ impl Relations {
             ch_right: ch_right::Relation::dummy(),
             maj: maj::Relation::dummy(),
             range_check_add: range_check_add::Relation::dummy(),
+            w: w::Relation::dummy(),
         }
     }
 }
