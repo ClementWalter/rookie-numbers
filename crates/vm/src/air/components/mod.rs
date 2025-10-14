@@ -20,7 +20,7 @@ use stwo_prover::{
     },
 };
 
-use crate::relations;
+use crate::air::relations;
 
 use serde::{Deserialize, Serialize};
 
@@ -118,7 +118,7 @@ impl<const N: usize> InteractionClaim<N> {
         lookup_data: &LookupData,
     ) -> (
         impl IntoIterator<Item = CircleEvaluation<SimdBackend, M31, BitReversedOrder>>,
-        InteractionClaim<N>,
+        Self,
     ) {
         let (
             single_constraint_with_relation_trace,
@@ -138,7 +138,7 @@ impl<const N: usize> InteractionClaim<N> {
             single_constraint_with_relation_trace
                 .into_iter()
                 .chain(memory_trace),
-            InteractionClaim {
+            Self {
                 single_constraint_with_relation: single_constraint_with_relation_interaction_claim,
                 memory: memory_interaction_claim,
             },

@@ -19,7 +19,7 @@ pub struct Claim<const N: usize> {
 }
 
 impl<const N: usize> Claim<N> {
-    pub fn new(log_size: u32) -> Self {
+    pub const fn new(log_size: u32) -> Self {
         Self { log_size }
     }
 

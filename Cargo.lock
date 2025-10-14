@@ -3,19 +3,6 @@
 version = 4
 
 [[package]]
-name = "air"
-version = "0.0.1"
-dependencies = [
- "num-traits",
- "rand",
- "rayon",
- "serde",
- "stwo-air-utils",
- "stwo-air-utils-derive",
- "stwo-prover",
-]
-
-[[package]]
 name = "anstyle"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -610,23 +597,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prover"
-version = "0.0.1"
-dependencies = [
- "air",
- "bincode",
- "divan",
- "num-traits",
- "peak_alloc",
- "serde",
- "serde_json",
- "stwo-prover",
- "thiserror 2.0.12",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,7 +611,6 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
- "libc",
  "rand_chacha",
  "rand_core",
 ]
@@ -661,9 +630,6 @@ name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
-dependencies = [
- "getrandom",
-]
 
 [[package]]
 name = "rayon"
@@ -787,6 +753,22 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "sha256"
+version = "0.0.1"
+dependencies = [
+ "bincode",
+ "itertools 0.13.0",
+ "num-traits",
+ "paste",
+ "serde",
+ "serde_json",
+ "stwo-prover",
+ "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1078,6 +1060,25 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vm"
+version = "0.0.1"
+dependencies = [
+ "bincode",
+ "divan",
+ "num-traits",
+ "peak_alloc",
+ "rayon",
+ "serde",
+ "serde_json",
+ "stwo-air-utils",
+ "stwo-air-utils-derive",
+ "stwo-prover",
+ "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "wasi"
