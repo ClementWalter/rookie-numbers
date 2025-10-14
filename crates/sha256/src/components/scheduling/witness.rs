@@ -76,7 +76,7 @@ fn generate_simd_sequence_bulk(start: usize, len: usize) -> Vec<u32x16> {
     (0..n)
         .map(|k| {
             let b = base + (k as u32) * 16;
-            u32x16::from_array(core::array::from_fn(|i| b + i as u32))
+            u32x16::from_array(core::array::from_fn(|i| (b + i as u32) & 0xffff))
         })
         .collect()
 }
