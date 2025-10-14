@@ -22,9 +22,10 @@ pub fn gen_trace(
     assert!(log_size >= LOG_N_LANES);
 
     let mut trace: Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> =
-        Vec::with_capacity(scheduling::N_COLUMNS + compression::N_COLUMNS);
-    let (scheduling_trace, scheduling_lookup_data) = scheduling::gen_trace(log_size);
-    let (compression_trace, compression_lookup_data) = compression::gen_trace(&scheduling_trace);
+        Vec::with_capacity(scheduling::witness::N_COLUMNS + compression::witness::N_COLUMNS);
+    let (scheduling_trace, scheduling_lookup_data) = scheduling::witness::gen_trace(log_size);
+    let (compression_trace, compression_lookup_data) =
+        compression::witness::gen_trace(&scheduling_trace);
 
     let lookup_data = LookupData {
         scheduling: scheduling_lookup_data,
@@ -47,16 +48,19 @@ pub fn gen_interaction_trace(
     let _span = span!(Level::INFO, "Generate interaction trace").entered();
 
     let mut interaction_trace: Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> =
-        Vec::with_capacity(scheduling::N_INTERACTION_COLUMNS + compression::N_INTERACTION_COLUMNS);
+        Vec::with_capacity(
+            scheduling::witness::N_INTERACTION_COLUMNS
+                + compression::witness::N_INTERACTION_COLUMNS,
+        );
     let mut claimed_sum = SecureField::from_u32_unchecked(0, 0, 0, 0);
 
     let (scheduling_interaction_trace, scheduling_claimed_sum) =
-        scheduling::gen_interaction_trace(&lookup_data.scheduling, relations);
+        scheduling::witness::gen_interaction_trace(&lookup_data.scheduling, relations);
     interaction_trace.extend(scheduling_interaction_trace);
     claimed_sum += scheduling_claimed_sum;
 
     let (compression_interaction_trace, compression_claimed_sum) =
-        compression::gen_interaction_trace(&lookup_data.compression, relations);
+        compression::witness::gen_interaction_trace(&lookup_data.compression, relations);
     interaction_trace.extend(compression_interaction_trace);
     claimed_sum += compression_claimed_sum;
 
