@@ -78,6 +78,7 @@ pub fn gen_interaction_trace(
 #[macro_export]
 macro_rules! round_columns {
     ($name:ident,$($column:ident),*) => {
+        #[derive(Debug)]
         pub struct $name<T> {
             $(pub $column: T),*
         }

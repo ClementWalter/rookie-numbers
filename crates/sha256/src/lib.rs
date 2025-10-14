@@ -93,11 +93,25 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
         &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
         components::scheduling::air::Eval {
             log_size,
-            relations,
+            relations: relations.clone(),
         },
         claimed_sum.scheduling,
     );
 
+    let compression_component = components::compression::air::Component::new(
+        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids()),
+        components::compression::air::Eval {
+            log_size,
+            relations,
+        },
+        claimed_sum.compression,
+    );
+
     info!("Scheduling component info:\n{}", scheduling_component);
-    prove(&[&scheduling_component], channel, commitment_scheme).unwrap()
+    prove(
+        &[&scheduling_component, &compression_component],
+        channel,
+        commitment_scheme,
+    )
+    .unwrap()
 }

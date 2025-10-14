@@ -262,9 +262,9 @@ pub fn gen_trace(
             let new_e_low = temp1_low + d_low[simd_row] - (e_carry_low << 16);
             let new_e_high = temp1_high + d_high[simd_row] + e_carry_low - (e_carry_high << 16);
             let a_carry_low = (temp1_low + temp2_low) >> 16;
-            let a_carry_high = (temp2_high + temp2_high + a_carry_low) >> 16;
+            let a_carry_high = (temp1_high + temp2_high + a_carry_low) >> 16;
             let new_a_low = temp1_low + temp2_low - (a_carry_low << 16);
-            let new_a_high = temp2_high + temp2_high + a_carry_low - (a_carry_high << 16);
+            let new_a_high = temp1_high + temp2_high + a_carry_low - (a_carry_high << 16);
 
             let trace_values: RoundColumns<u32x16> = RoundColumns {
                 // BIG_SIGMA1
