@@ -2,6 +2,7 @@ use itertools::Itertools;
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
+use stwo_prover::core::channel::Channel;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
@@ -15,14 +16,33 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(Relation, 6);
-/// Lookup data for the BigSigma1 function.
-/// The big_sigma1 function is emulated with 3 lookups, one for each partition I0, I1,
-/// and a final lookup for O2 xor.
-pub struct LookupData {
-    pub i0: [BaseColumn; N_IO_COLUMNS], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub i1: [BaseColumn; N_I1_COLUMNS], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
+relation!(I0, N_IO_COLUMNS);
+relation!(I1, N_I1_COLUMNS);
+relation!(O2, N_O2_COLUMNS);
+
+#[derive(Debug, Clone)]
+pub struct Relation {
+    pub i0: I0,
+    pub i1: I1,
+    pub o2: O2,
+}
+
+impl Relation {
+    pub fn dummy() -> Self {
+        Self {
+            i0: I0::dummy(),
+            i1: I1::dummy(),
+            o2: O2::dummy(),
+        }
+    }
+
+    pub fn draw(channel: &mut impl Channel) -> Self {
+        Self {
+            i0: I0::draw(channel),
+            i1: I1::draw(channel),
+            o2: O2::draw(channel),
+        }
+    }
 }
 
 pub struct Columns;

@@ -3,16 +3,23 @@
 //! This is, 64 iterations of the main loop, doing Sigma0, Sigma1 and adding the
 //! results with the buffer values.
 
-use crate::components::compression::columns::{InteractionColumns, RoundColumns};
-use crate::partitions::{pext_u32x16, BigSigma0, BigSigma1};
-use crate::sha256::{
-    big_sigma0_u32x16, big_sigma1_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
+use crate::components::compression::columns::{
+    InteractionColumns, InteractionColumnsIndex, RoundColumns,
 };
+use crate::partitions::{pext_u32x16, BigSigma0, BigSigma1};
+use crate::relations::Relations;
+use crate::sha256::{
+    big_sigma1_u32x16, big_sigma_0_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
+};
+use crate::{combine, write_col};
 use itertools::izip;
+use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
+use stwo_prover::constraint_framework::Relation;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::m31::{PackedM31, LOG_N_LANES};
 use stwo_prover::core::backend::simd::SimdBackend;
 use stwo_prover::core::fields::m31::BaseField;
+use stwo_prover::core::fields::qm31::QM31;
 use stwo_prover::core::poly::circle::CanonicCoset;
 use stwo_prover::core::poly::circle::CircleEvaluation;
 use stwo_prover::core::poly::BitReversedOrder;
@@ -35,7 +42,7 @@ const CARRIES_COLUMNS: usize = 4;
 
 const COL_PER_ROUND: usize =
     BIG_SIGMA1_COLUMNS + CH_COLUMNS + BIG_SIGMA0_COLUMNS + MAJ_COLUMNS + CARRIES_COLUMNS;
-const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 2 * 6;
+const INTERACTION_COL_PER_ROUND: usize = COL_PER_ROUND + 16;
 pub const N_COLUMNS: usize = W_SIZE + COL_PER_ROUND * N_ROUNDS;
 pub const N_INTERACTION_COLUMNS: usize = W_SIZE + INTERACTION_COL_PER_ROUND * N_ROUNDS;
 
@@ -145,29 +152,29 @@ pub fn gen_trace(
             // Decomposition over I0
             let e_i0_low = e_low[simd_row] & u32x16::splat(BigSigma1::I0_L);
             let e_i0_high = e_high[simd_row] & u32x16::splat(BigSigma1::I0_H);
-            let sigma1 = big_sigma1_u32x16(e_i0_low + (e_i0_high << 16));
-            let sigma1_o0_low = sigma1 & u32x16::splat(BigSigma1::O0_L);
-            let sigma1_o0_high = (sigma1 >> 16) & u32x16::splat(BigSigma1::O0_H);
-            let sigma1_o20 = sigma1 & u32x16::splat(BigSigma1::O2);
-            let sigma1_o20_pext = pext_u32x16(sigma1_o20, BigSigma1::O2);
+            let sigma_1 = big_sigma1_u32x16(e_i0_low + (e_i0_high << 16));
+            let sigma_1_o0_low = sigma_1 & u32x16::splat(BigSigma1::O0_L);
+            let sigma_1_o0_high = (sigma_1 >> 16) & u32x16::splat(BigSigma1::O0_H);
+            let sigma_1_o20 = sigma_1 & u32x16::splat(BigSigma1::O2);
+            let sigma_1_o20_pext = pext_u32x16(sigma_1_o20, BigSigma1::O2);
 
             // Decomposition over I1
             let e_i1_low = e_low[simd_row] & u32x16::splat(BigSigma1::I1_L);
             let e_i1_high = e_high[simd_row] & u32x16::splat(BigSigma1::I1_H);
-            let sigma1 = big_sigma1_u32x16(e_i1_low + (e_i1_high << 16));
-            let sigma1_o1_low = sigma1 & u32x16::splat(BigSigma1::O1_L);
-            let sigma1_o1_high = (sigma1 >> 16) & u32x16::splat(BigSigma1::O1_H);
-            let sigma1_o21 = sigma1 & u32x16::splat(BigSigma1::O2);
-            let sigma1_o21_pext = pext_u32x16(sigma1_o21, BigSigma1::O2);
+            let sigma_1 = big_sigma1_u32x16(e_i1_low + (e_i1_high << 16));
+            let sigma_1_o1_low = sigma_1 & u32x16::splat(BigSigma1::O1_L);
+            let sigma_1_o1_high = (sigma_1 >> 16) & u32x16::splat(BigSigma1::O1_H);
+            let sigma_1_o21 = sigma_1 & u32x16::splat(BigSigma1::O2);
+            let sigma_1_o21_pext = pext_u32x16(sigma_1_o21, BigSigma1::O2);
 
             // XOR the two O2 values
-            let sigma1_o2 = sigma1_o20 ^ sigma1_o21;
-            let sigma1_o2_low = sigma1_o2 & u32x16::splat(0xffff);
-            let sigma1_o2_high = sigma1_o2 >> 16;
+            let big_sigma_1_o2 = sigma_1_o20 ^ sigma_1_o21;
+            let sigma_1_o2_low = big_sigma_1_o2 & u32x16::splat(0xffff);
+            let sigma_1_o2_high = big_sigma_1_o2 >> 16;
 
             // Compute sigma output
-            let sigma1_low = sigma1_o0_low + sigma1_o1_low + sigma1_o2_low;
-            let sigma1_high = sigma1_o0_high + sigma1_o1_high + sigma1_o2_high;
+            let sigma1_low = sigma_1_o0_low + sigma_1_o1_low + sigma_1_o2_low;
+            let sigma1_high = sigma_1_o0_high + sigma_1_o1_high + sigma_1_o2_high;
 
             // CH
             // left side
@@ -175,23 +182,23 @@ pub fn gen_trace(
             let f_i0_high = f_high[simd_row] & u32x16::splat(BigSigma1::I0_H);
             let f_i1_low = f_low[simd_row] & u32x16::splat(BigSigma1::I1_L);
             let f_i1_high = f_high[simd_row] & u32x16::splat(BigSigma1::I1_H);
-            let ch_left_i0_l = ch_left_u32x16(e_i0_low, f_i0_low);
-            let ch_left_i0_h = ch_left_u32x16(e_i0_high, f_i0_high);
-            let ch_left_i1_l = ch_left_u32x16(e_i1_low, f_i1_low);
-            let ch_left_i1_h = ch_left_u32x16(e_i1_high, f_i1_high);
+            let ch_left_i0_low = ch_left_u32x16(e_i0_low, f_i0_low);
+            let ch_left_i0_high = ch_left_u32x16(e_i0_high, f_i0_high);
+            let ch_left_i1_low = ch_left_u32x16(e_i1_low, f_i1_low);
+            let ch_left_i1_high = ch_left_u32x16(e_i1_high, f_i1_high);
 
             // right side
             let g_i0_low = g_low[simd_row] & u32x16::splat(BigSigma1::I0_L);
             let g_i0_high = g_high[simd_row] & u32x16::splat(BigSigma1::I0_H);
             let g_i1_low = g_low[simd_row] & u32x16::splat(BigSigma1::I1_L);
             let g_i1_high = g_high[simd_row] & u32x16::splat(BigSigma1::I1_H);
-            let ch_right_i0_l = ch_right_u32x16(e_i0_low, g_i0_low);
-            let ch_right_i0_h = ch_right_u32x16(e_i0_high, g_i0_high);
-            let ch_right_i1_l = ch_right_u32x16(e_i1_low, g_i1_low);
-            let ch_right_i1_h = ch_right_u32x16(e_i1_high, g_i1_high);
+            let ch_right_i0_low = ch_right_u32x16(e_i0_low, g_i0_low);
+            let ch_right_i0_high = ch_right_u32x16(e_i0_high, g_i0_high);
+            let ch_right_i1_low = ch_right_u32x16(e_i1_low, g_i1_low);
+            let ch_right_i1_high = ch_right_u32x16(e_i1_high, g_i1_high);
 
-            let ch_low = ch_left_i0_l + ch_left_i1_l + ch_right_i0_l + ch_right_i1_l;
-            let ch_high = ch_left_i0_h + ch_left_i1_h + ch_right_i0_h + ch_right_i1_h;
+            let ch_low = ch_left_i0_low + ch_left_i1_low + ch_right_i0_low + ch_right_i1_low;
+            let ch_high = ch_left_i0_high + ch_left_i1_high + ch_right_i0_high + ch_right_i1_high;
 
             // BIG_SIGMA0
             // Decomposition over I0
@@ -199,31 +206,31 @@ pub fn gen_trace(
             let a_i0_high_0 = a_high[simd_row] & u32x16::splat(BigSigma0::I0_H0);
             let a_i0_high_1 = (a_high[simd_row] >> 8) & u32x16::splat(BigSigma0::I0_H1);
 
-            let sigma0 = big_sigma0_u32x16(a_i0_low + (a_i0_high_0 << 16) + (a_i0_high_1 << 24));
-            let sigma0_o0_low = sigma0 & u32x16::splat(BigSigma0::O0_L);
-            let sigma0_o0_high = (sigma0 >> 16) & u32x16::splat(BigSigma0::O0_H);
-            let sigma0_o20 = sigma0 & u32x16::splat(BigSigma0::O2);
-            let sigma0_o20_pext = pext_u32x16(sigma0_o20, BigSigma0::O2);
+            let sigma_0 = big_sigma_0_u32x16(a_i0_low + (a_i0_high_0 << 16) + (a_i0_high_1 << 24));
+            let sigma_0_o0_low = sigma_0 & u32x16::splat(BigSigma0::O0_L);
+            let sigma_0_o0_high = (sigma_0 >> 16) & u32x16::splat(BigSigma0::O0_H);
+            let sigma_0_o20 = sigma_0 & u32x16::splat(BigSigma0::O2);
+            let sigma_0_o20_pext = pext_u32x16(sigma_0_o20, BigSigma0::O2);
 
             // Decomposition over I1
             let a_i1_low_0 = a_low[simd_row] & u32x16::splat(BigSigma0::I1_L0);
             let a_i1_low_1 = (a_low[simd_row] >> 8) & u32x16::splat(BigSigma0::I1_L1);
             let a_i1_high = a_high[simd_row] & u32x16::splat(BigSigma0::I1_H);
 
-            let sigma0 = big_sigma0_u32x16(a_i1_low_0 + (a_i1_low_1 << 8) + (a_i1_high << 16));
-            let sigma0_o1_low = sigma0 & u32x16::splat(BigSigma0::O1_L);
-            let sigma0_o1_high = (sigma0 >> 16) & u32x16::splat(BigSigma0::O1_H);
-            let sigma0_o21 = sigma0 & u32x16::splat(BigSigma0::O2);
-            let sigma0_o21_pext = pext_u32x16(sigma0_o21, BigSigma0::O2);
+            let sigma_0 = big_sigma_0_u32x16(a_i1_low_0 + (a_i1_low_1 << 8) + (a_i1_high << 16));
+            let sigma_0_o1_low = sigma_0 & u32x16::splat(BigSigma0::O1_L);
+            let sigma_0_o1_high = (sigma_0 >> 16) & u32x16::splat(BigSigma0::O1_H);
+            let sigma_0_o21 = sigma_0 & u32x16::splat(BigSigma0::O2);
+            let sigma_0_o21_pext = pext_u32x16(sigma_0_o21, BigSigma0::O2);
 
             // XOR the two O2 values
-            let sigma0_o2 = sigma0_o20 ^ sigma0_o21;
-            let sigma0_o2_low = sigma0_o2 & u32x16::splat(0xffff);
-            let sigma0_o2_high = sigma0_o2 >> 16;
+            let big_sigma_0_o2 = sigma_0_o20 ^ sigma_0_o21;
+            let sigma_0_o2_low = big_sigma_0_o2 & u32x16::splat(0xffff);
+            let sigma_0_o2_high = big_sigma_0_o2 >> 16;
 
-            // Compute sigma0 output
-            let sigma0_low = sigma0_o0_low + sigma0_o1_low + sigma0_o2_low;
-            let sigma0_high = sigma0_o0_high + sigma0_o1_high + sigma0_o2_high;
+            // Compute sigma_0 output
+            let sigma_0_low = sigma_0_o0_low + sigma_0_o1_low + sigma_0_o2_low;
+            let sigma_0_high = sigma_0_o0_high + sigma_0_o1_high + sigma_0_o2_high;
 
             // MAJ
             let b_i0_low = b_low[simd_row] & u32x16::splat(BigSigma0::I0_L);
@@ -249,52 +256,56 @@ pub fn gen_trace(
 
             let temp1_low = h_low[simd_row] + sigma1_low + ch_low + k_low + w_low;
             let temp1_high = h_high[simd_row] + sigma1_high + ch_high + k_high + w_high;
-            let temp2_low = sigma0_low + maj_low;
-            let temp2_high = sigma0_high + maj_high;
+            let temp2_low = sigma_0_low + maj_low;
+            let temp2_high = sigma_0_high + maj_high;
 
             let e_carry_low = (temp1_low + d_low[simd_row]) >> 16;
             let e_carry_high = (temp1_high + d_high[simd_row] + e_carry_low) >> 16;
+            let new_e_low = temp1_low + d_low[simd_row] - (e_carry_low << 16);
+            let new_e_high = temp1_high + d_high[simd_row] + e_carry_low - (e_carry_high << 16);
             let a_carry_low = (temp1_low + temp2_low) >> 16;
             let a_carry_high = (temp2_high + temp2_high + a_carry_low) >> 16;
+            let new_a_low = temp1_low + temp2_low - (a_carry_low << 16);
+            let new_a_high = temp2_high + temp2_high + a_carry_low - (a_carry_high << 16);
 
             let trace_values: RoundColumns<u32x16> = RoundColumns {
                 // BIG_SIGMA1
                 e_i0_low,
                 e_i0_high,
-                sigma1_o0_low,
-                sigma1_o0_high,
-                sigma1_o20_pext,
-                sigma1_o1_low,
-                sigma1_o1_high,
-                sigma1_o21_pext,
-                sigma1_o2_low,
-                sigma1_o2_high,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high,
                 // CH
                 f_i0_low,
                 f_i0_high,
-                ch_left_i0_l,
-                ch_left_i0_h,
-                ch_left_i1_l,
-                ch_left_i1_h,
+                ch_left_i0_low,
+                ch_left_i0_high,
+                ch_left_i1_low,
+                ch_left_i1_high,
                 g_i0_low,
                 g_i0_high,
-                ch_right_i0_l,
-                ch_right_i0_h,
-                ch_right_i1_l,
-                ch_right_i1_h,
+                ch_right_i0_low,
+                ch_right_i0_high,
+                ch_right_i1_low,
+                ch_right_i1_high,
                 // BIG_SIGMA0
                 a_i0_high_0,
                 a_i0_high_1,
                 a_i1_low_0,
                 a_i1_low_1,
-                sigma0_o0_low,
-                sigma0_o0_high,
-                sigma0_o20_pext,
-                sigma0_o1_low,
-                sigma0_o1_high,
-                sigma0_o21_pext,
-                sigma0_o2_low,
-                sigma0_o2_high,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high,
                 // MAJ
                 b_i0_high_0,
                 b_i0_high_1,
@@ -324,48 +335,48 @@ pub fn gen_trace(
                 // BIG_SIGMA1
                 e_i0_low,
                 e_i0_high,
-                sigma1_o0_low,
-                sigma1_o0_high,
-                sigma1_o20_pext,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext,
                 e_i1_low,
                 e_i1_high,
-                sigma1_o1_low,
-                sigma1_o1_high,
-                sigma1_o21_pext,
-                sigma1_o2_low,
-                sigma1_o2_high,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high,
                 // CH
                 f_i0_low,
                 f_i0_high,
                 f_i1_low,
                 f_i1_high,
-                ch_left_i0_l,
-                ch_left_i0_h,
-                ch_left_i1_l,
-                ch_left_i1_h,
+                ch_left_i0_low,
+                ch_left_i0_high,
+                ch_left_i1_low,
+                ch_left_i1_high,
                 g_i0_low,
                 g_i0_high,
                 g_i1_low,
                 g_i1_high,
-                ch_right_i0_l,
-                ch_right_i0_h,
-                ch_right_i1_l,
-                ch_right_i1_h,
+                ch_right_i0_low,
+                ch_right_i0_high,
+                ch_right_i1_low,
+                ch_right_i1_high,
                 // BIG_SIGMA0
                 a_i0_low,
                 a_i0_high_0,
                 a_i0_high_1,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext,
                 a_i1_low_0,
                 a_i1_low_1,
                 a_i1_high,
-                sigma0_o0_low,
-                sigma0_o0_high,
-                sigma0_o20_pext,
-                sigma0_o1_low,
-                sigma0_o1_high,
-                sigma0_o21_pext,
-                sigma0_o2_low,
-                sigma0_o2_high,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high,
                 // MAJ
                 b_i0_low,
                 b_i0_high_0,
@@ -388,8 +399,12 @@ pub fn gen_trace(
                 // ADD
                 e_carry_low,
                 e_carry_high,
+                new_e_low,
+                new_e_high,
                 a_carry_low,
                 a_carry_high,
+                new_a_low,
+                new_a_high,
             };
             for (i, value) in interaction_values.to_vec().iter().enumerate() {
                 lookup_data[interaction_index + i].push(*value);
@@ -431,26 +446,26 @@ fn update_hash_buffer(hash_buffer: &mut [Vec<u32x16>], evals: &[Vec<u32x16>], ro
     let k_low = u32x16::splat(K[round] & 0xffff);
     let k_high = u32x16::splat(K[round] >> 16);
 
-    let sigma1_o0_low = evals[trace_index(round, RoundColumnsIndex::sigma1_o0_low)].clone();
-    let sigma1_o0_high = evals[trace_index(round, RoundColumnsIndex::sigma1_o0_high)].clone();
-    let sigma1_o1_low = evals[trace_index(round, RoundColumnsIndex::sigma1_o1_low)].clone();
-    let sigma1_o1_high = evals[trace_index(round, RoundColumnsIndex::sigma1_o1_high)].clone();
-    let sigma1_o2_low = evals[trace_index(round, RoundColumnsIndex::sigma1_o2_low)].clone();
-    let sigma1_o2_high = evals[trace_index(round, RoundColumnsIndex::sigma1_o2_high)].clone();
-    let ch_left_i0_l = evals[trace_index(round, RoundColumnsIndex::ch_left_i0_l)].clone();
-    let ch_left_i0_h = evals[trace_index(round, RoundColumnsIndex::ch_left_i0_h)].clone();
-    let ch_left_i1_l = evals[trace_index(round, RoundColumnsIndex::ch_left_i1_l)].clone();
-    let ch_left_i1_h = evals[trace_index(round, RoundColumnsIndex::ch_left_i1_h)].clone();
-    let ch_right_i0_l = evals[trace_index(round, RoundColumnsIndex::ch_right_i0_l)].clone();
-    let ch_right_i0_h = evals[trace_index(round, RoundColumnsIndex::ch_right_i0_h)].clone();
-    let ch_right_i1_l = evals[trace_index(round, RoundColumnsIndex::ch_right_i1_l)].clone();
-    let ch_right_i1_h = evals[trace_index(round, RoundColumnsIndex::ch_right_i1_h)].clone();
-    let sigma0_o0_low = evals[trace_index(round, RoundColumnsIndex::sigma0_o0_low)].clone();
-    let sigma0_o0_high = evals[trace_index(round, RoundColumnsIndex::sigma0_o0_high)].clone();
-    let sigma0_o1_low = evals[trace_index(round, RoundColumnsIndex::sigma0_o1_low)].clone();
-    let sigma0_o1_high = evals[trace_index(round, RoundColumnsIndex::sigma0_o1_high)].clone();
-    let sigma0_o2_low = evals[trace_index(round, RoundColumnsIndex::sigma0_o2_low)].clone();
-    let sigma0_o2_high = evals[trace_index(round, RoundColumnsIndex::sigma0_o2_high)].clone();
+    let sigma_1_o0_low = evals[trace_index(round, RoundColumnsIndex::sigma_1_o0_low)].clone();
+    let sigma_1_o0_high = evals[trace_index(round, RoundColumnsIndex::sigma_1_o0_high)].clone();
+    let sigma_1_o1_low = evals[trace_index(round, RoundColumnsIndex::sigma_1_o1_low)].clone();
+    let sigma_1_o1_high = evals[trace_index(round, RoundColumnsIndex::sigma_1_o1_high)].clone();
+    let sigma_1_o2_low = evals[trace_index(round, RoundColumnsIndex::sigma_1_o2_low)].clone();
+    let sigma_1_o2_high = evals[trace_index(round, RoundColumnsIndex::sigma_1_o2_high)].clone();
+    let ch_left_i0_low = evals[trace_index(round, RoundColumnsIndex::ch_left_i0_low)].clone();
+    let ch_left_i0_high = evals[trace_index(round, RoundColumnsIndex::ch_left_i0_high)].clone();
+    let ch_left_i1_low = evals[trace_index(round, RoundColumnsIndex::ch_left_i1_low)].clone();
+    let ch_left_i1_high = evals[trace_index(round, RoundColumnsIndex::ch_left_i1_high)].clone();
+    let ch_right_i0_low = evals[trace_index(round, RoundColumnsIndex::ch_right_i0_low)].clone();
+    let ch_right_i0_high = evals[trace_index(round, RoundColumnsIndex::ch_right_i0_high)].clone();
+    let ch_right_i1_low = evals[trace_index(round, RoundColumnsIndex::ch_right_i1_low)].clone();
+    let ch_right_i1_high = evals[trace_index(round, RoundColumnsIndex::ch_right_i1_high)].clone();
+    let sigma_0_o0_low = evals[trace_index(round, RoundColumnsIndex::sigma_0_o0_low)].clone();
+    let sigma_0_o0_high = evals[trace_index(round, RoundColumnsIndex::sigma_0_o0_high)].clone();
+    let sigma_0_o1_low = evals[trace_index(round, RoundColumnsIndex::sigma_0_o1_low)].clone();
+    let sigma_0_o1_high = evals[trace_index(round, RoundColumnsIndex::sigma_0_o1_high)].clone();
+    let sigma_0_o2_low = evals[trace_index(round, RoundColumnsIndex::sigma_0_o2_low)].clone();
+    let sigma_0_o2_high = evals[trace_index(round, RoundColumnsIndex::sigma_0_o2_high)].clone();
     let maj_i0_low = evals[trace_index(round, RoundColumnsIndex::maj_i0_low)].clone();
     let maj_i0_high_0 = evals[trace_index(round, RoundColumnsIndex::maj_i0_high_0)].clone();
     let maj_i0_high_1 = evals[trace_index(round, RoundColumnsIndex::maj_i0_high_1)].clone();
@@ -462,24 +477,34 @@ fn update_hash_buffer(hash_buffer: &mut [Vec<u32x16>], evals: &[Vec<u32x16>], ro
     let a_carry_low = evals[trace_index(round, RoundColumnsIndex::a_carry_low)].clone();
     let a_carry_high = evals[trace_index(round, RoundColumnsIndex::a_carry_high)].clone();
 
-    let sigma1_high: Vec<u32x16> = izip!(sigma1_o0_high, sigma1_o1_high, sigma1_o2_high)
+    let sigma1_high: Vec<u32x16> = izip!(sigma_1_o0_high, sigma_1_o1_high, sigma_1_o2_high)
         .map(|(a, b, c)| a + b + c)
         .collect();
-    let sigma1_low: Vec<u32x16> = izip!(sigma1_o0_low, sigma1_o1_low, sigma1_o2_low)
+    let sigma1_low: Vec<u32x16> = izip!(sigma_1_o0_low, sigma_1_o1_low, sigma_1_o2_low)
         .map(|(a, b, c)| a + b + c)
         .collect();
 
-    let ch_low: Vec<u32x16> = izip!(ch_left_i0_l, ch_left_i1_l, ch_right_i0_l, ch_right_i1_l)
-        .map(|(a, b, c, d)| a + b + c + d)
-        .collect();
-    let ch_high: Vec<u32x16> = izip!(ch_left_i0_h, ch_left_i1_h, ch_right_i0_h, ch_right_i1_h)
-        .map(|(a, b, c, d)| a + b + c + d)
-        .collect();
+    let ch_low: Vec<u32x16> = izip!(
+        ch_left_i0_low,
+        ch_left_i1_low,
+        ch_right_i0_low,
+        ch_right_i1_low
+    )
+    .map(|(a, b, c, d)| a + b + c + d)
+    .collect();
+    let ch_high: Vec<u32x16> = izip!(
+        ch_left_i0_high,
+        ch_left_i1_high,
+        ch_right_i0_high,
+        ch_right_i1_high
+    )
+    .map(|(a, b, c, d)| a + b + c + d)
+    .collect();
 
-    let sigma0_high: Vec<u32x16> = izip!(sigma0_o0_high, sigma0_o1_high, sigma0_o2_high)
+    let sigma_0_high: Vec<u32x16> = izip!(sigma_0_o0_high, sigma_0_o1_high, sigma_0_o2_high)
         .map(|(a, b, c)| a + b + c)
         .collect();
-    let sigma0_low: Vec<u32x16> = izip!(sigma0_o0_low, sigma0_o1_low, sigma0_o2_low)
+    let sigma_0_low: Vec<u32x16> = izip!(sigma_0_o0_low, sigma_0_o1_low, sigma_0_o2_low)
         .map(|(a, b, c)| a + b + c)
         .collect();
 
@@ -497,8 +522,8 @@ fn update_hash_buffer(hash_buffer: &mut [Vec<u32x16>], evals: &[Vec<u32x16>], ro
         .map(|(a, b, c, d)| a + b + c + d + k_low)
         .collect();
 
-    let temp2_high: Vec<u32x16> = izip!(sigma0_high, maj_high).map(|(a, b)| a + b).collect();
-    let temp2_low: Vec<u32x16> = izip!(sigma0_low, maj_low).map(|(a, b)| a + b).collect();
+    let temp2_high: Vec<u32x16> = izip!(sigma_0_high, maj_high).map(|(a, b)| a + b).collect();
+    let temp2_low: Vec<u32x16> = izip!(sigma_0_low, maj_low).map(|(a, b)| a + b).collect();
 
     let e_low: Vec<u32x16> = izip!(d_low.clone(), temp1_low.clone(), e_carry_low.clone())
         .map(|(a, b, carry_low)| a + b - (carry_low << u32x16::splat(16)))
@@ -531,6 +556,273 @@ fn update_hash_buffer(hash_buffer: &mut [Vec<u32x16>], evals: &[Vec<u32x16>], ro
     hash_buffer[1] = a_high; // a_high = temp1_high + temp2_high
     hash_buffer[0] = a_low; // a_low = temp1_low + temp2_low
 }
+
+#[allow(clippy::cognitive_complexity)]
+pub fn gen_interaction_trace(
+    lookup_data: &[Vec<u32x16>],
+    relations: &Relations,
+) -> (
+    ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    QM31,
+) {
+    let _span = span!(Level::INFO, "Scheduling interaction trace").entered();
+    let simd_size = lookup_data[0].len();
+    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
+
+    for round in 0..N_ROUNDS {
+        let base_index = W_SIZE + round * INTERACTION_COL_PER_ROUND;
+
+        // BIG_SIGMA1
+        let big_sigma_1_i0 = combine!(
+            relations.big_sigma_1.i0,
+            lookup_data,
+            base_index,
+            e_i0_low,
+            e_i0_high,
+            sigma_1_o0_low,
+            sigma_1_o0_high,
+            sigma_1_o20_pext
+        );
+        let big_sigma_1_i1 = combine!(
+            relations.big_sigma_1.i1,
+            lookup_data,
+            base_index,
+            e_i1_low,
+            e_i1_high,
+            sigma_1_o1_low,
+            sigma_1_o1_high,
+            sigma_1_o21_pext
+        );
+        let big_sigma_1_o2 = combine!(
+            relations.big_sigma_1.o2,
+            lookup_data,
+            base_index,
+            sigma_1_o20_pext,
+            sigma_1_o21_pext,
+            sigma_1_o2_low,
+            sigma_1_o2_high
+        );
+        // CH_LEFT
+        let ch_left_i0_low = combine!(
+            relations.ch_left.i0_low,
+            lookup_data,
+            base_index,
+            e_i0_low,
+            f_i0_low,
+            ch_left_i0_low,
+        );
+        let ch_left_i0_high = combine!(
+            relations.ch_left.i0_high,
+            lookup_data,
+            base_index,
+            e_i0_high,
+            f_i0_high,
+            ch_left_i0_high,
+        );
+        let ch_left_i1_low = combine!(
+            relations.ch_left.i1_low,
+            lookup_data,
+            base_index,
+            e_i1_low,
+            f_i1_low,
+            ch_left_i1_low,
+        );
+        let ch_left_i1_high = combine!(
+            relations.ch_left.i1_high,
+            lookup_data,
+            base_index,
+            e_i1_high,
+            f_i1_high,
+            ch_left_i1_high,
+        );
+        // CH_RIGHT
+        let ch_right_i0_low = combine!(
+            relations.ch_right.i0_low,
+            lookup_data,
+            base_index,
+            e_i0_low,
+            g_i0_low,
+            ch_right_i0_low,
+        );
+        let ch_right_i0_high = combine!(
+            relations.ch_right.i0_high,
+            lookup_data,
+            base_index,
+            e_i0_high,
+            g_i0_high,
+            ch_right_i0_high,
+        );
+        let ch_right_i1_low = combine!(
+            relations.ch_right.i1_low,
+            lookup_data,
+            base_index,
+            e_i1_low,
+            g_i1_low,
+            ch_right_i1_low,
+        );
+        let ch_right_i1_high = combine!(
+            relations.ch_right.i1_high,
+            lookup_data,
+            base_index,
+            e_i1_high,
+            g_i1_high,
+            ch_right_i1_high,
+        );
+        // BIG SIGMA0
+        let big_sigma_0_i0 = combine!(
+            relations.big_sigma_0.i0,
+            lookup_data,
+            base_index,
+            a_i0_low,
+            a_i0_high_0,
+            a_i0_high_1,
+            sigma_0_o0_low,
+            sigma_0_o0_high,
+            sigma_0_o20_pext,
+        );
+        let big_sigma_0_i1 = combine!(
+            relations.big_sigma_0.i1,
+            lookup_data,
+            base_index,
+            a_i1_low_0,
+            a_i1_low_1,
+            a_i1_high,
+            sigma_0_o1_low,
+            sigma_0_o1_high,
+            sigma_0_o21_pext,
+        );
+        let big_sigma_0_o2 = combine!(
+            relations.big_sigma_0.o2,
+            lookup_data,
+            base_index,
+            sigma_0_o20_pext,
+            sigma_0_o21_pext,
+            sigma_0_o2_low,
+            sigma_0_o2_high,
+        );
+        // MAJ
+        let maj_i0_low = combine!(
+            relations.maj.i0_low,
+            lookup_data,
+            base_index,
+            a_i0_low,
+            b_i0_low,
+            c_i0_low,
+            maj_i0_low,
+        );
+        let maj_i0_high_0 = combine!(
+            relations.maj.i0_high_0,
+            lookup_data,
+            base_index,
+            a_i0_high_0,
+            b_i0_high_0,
+            c_i0_high_0,
+            maj_i0_high_0,
+        );
+        let maj_i0_high_1 = combine!(
+            relations.maj.i0_high_1,
+            lookup_data,
+            base_index,
+            a_i0_high_1,
+            b_i0_high_1,
+            c_i0_high_1,
+            maj_i0_high_1,
+        );
+        let maj_i1_low_0 = combine!(
+            relations.maj.i1_low_0,
+            lookup_data,
+            base_index,
+            a_i1_low_0,
+            b_i1_low_0,
+            c_i1_low_0,
+            maj_i1_low_0,
+        );
+        let maj_i1_low_1 = combine!(
+            relations.maj.i1_low_1,
+            lookup_data,
+            base_index,
+            a_i1_low_1,
+            b_i1_low_1,
+            c_i1_low_1,
+            maj_i1_low_1,
+        );
+        let maj_i1_high = combine!(
+            relations.maj.i1_high,
+            lookup_data,
+            base_index,
+            a_i1_high,
+            b_i1_high,
+            c_i1_high,
+            maj_i1_high,
+        );
+        // ADD
+        let e_carry_low = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_e_low,
+            e_carry_low,
+        );
+        let e_carry_high = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_e_high,
+            e_carry_high,
+        );
+        let a_carry_low = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_a_low,
+            a_carry_low,
+        );
+        let a_carry_high = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_a_high,
+            a_carry_high,
+        );
+
+        let secure_columns = [
+            big_sigma_1_i0,
+            big_sigma_1_i1,
+            big_sigma_1_o2,
+            ch_left_i0_low,
+            ch_left_i0_high,
+            ch_left_i1_low,
+            ch_left_i1_high,
+            ch_right_i0_low,
+            ch_right_i0_high,
+            ch_right_i1_low,
+            ch_right_i1_high,
+            big_sigma_0_i0,
+            big_sigma_0_i1,
+            big_sigma_0_o2,
+            maj_i0_low,
+            maj_i0_high_0,
+            maj_i0_high_1,
+            maj_i1_low_0,
+            maj_i1_low_1,
+            maj_i1_high,
+            e_carry_low,
+            e_carry_high,
+            a_carry_low,
+            a_carry_high,
+        ];
+        for i in 0..(secure_columns.len() / 2) {
+            write_col!(
+                secure_columns[2 * i],
+                secure_columns[2 * i + 1],
+                interaction_trace
+            );
+        }
+    }
+
+    interaction_trace.finalize_last()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{

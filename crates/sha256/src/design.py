@@ -10,11 +10,11 @@ Summary:
 - maj costs 14T + 6L
 - addition costs 2T + 2L
 - schedule: 48 * (s0 + s1 + add) = 48 * (10T + 3L + 10T + 3L + 2T + 2L) = 48 * (22T + 8L) = 1056T + 384L
-- compression: 64 * (S0 + S1 + ch + maj + 2*add) = 64 * (12T + 3L + 10T + 3L + 12T + 4L + 14T + 6L + 2T + 2L + 2T + 2L) = 64 * (52T + 20L) = 3328T + 1280L
+- compression: 64 * (S0 + S1 + ch + maj + 2*add) = 64 * (12T + 3L + 10T + 4L + 12T + 4L + 14T + 6L + 2T + 2L + 2T + 2L) = 64 * (52T + 21L) = 3328T + 1344L
 
-Total: 4384T + 1664L
+Total: 4384T + 1728L
 
-Using L = 2T, we get 7584 cells
+Using L = 2T, we get 7840 cells
 """
 
 # %% Imports
@@ -22,9 +22,9 @@ import random
 
 # %% SHA256 functions
 SIGMA_PARAMS = {
-    "small_sigma0": (7, 18, 3),
+    "small_sigma_0": (7, 18, 3),
     "small_sigma1": (17, 19, 10),
-    "big_sigma0": (2, 13, 22),
+    "big_sigma_0": (2, 13, 22),
     "big_sigma1": (6, 11, 25),
 }
 
@@ -177,7 +177,7 @@ def process_chunk(chunk, H):
     for t in range(16, 64):
         W[t] = (
             W[t - 16]
-            + sigma(W[t - 15], *SIGMA_PARAMS["small_sigma0"])
+            + sigma(W[t - 15], *SIGMA_PARAMS["small_sigma_0"])
             + W[t - 7]
             + sigma(W[t - 2], *SIGMA_PARAMS["small_sigma1"])
         )
@@ -193,7 +193,7 @@ def process_chunk(chunk, H):
             + K[t]
             + W[t]
         )
-        temp2 = sigma(a, *SIGMA_PARAMS["big_sigma0"]) + maj(a, b, c)
+        temp2 = sigma(a, *SIGMA_PARAMS["big_sigma_0"]) + maj(a, b, c)
         h = g
         g = f
         f = e
@@ -218,9 +218,9 @@ def process_chunk(chunk, H):
 #' The main goal with splitting the 32-bits input space is to be able to compute bit operations
 #' with lookups no bigger than 2**21. Actually, there are four expressions that need to be emulated
 #' using lookups:
-#' - small_sigma0(w)
+#' - small_sigma_0(w)
 #' - small_sigma1(w)
-#' - big_sigma0(a) + maj(a, b, c)
+#' - big_sigma_0(a) + maj(a, b, c)
 #' - big_sigma1(e) + ch(e, f, g)
 #'
 #' Sigma computations are defined as XOR over the bit shifted or bit rotated input. Given the periodicity
@@ -324,7 +324,7 @@ def pext(x, mask):
 #' - O0: bits only affected by partition I0
 #' - O1: bits only affected by partition I1
 #' - O2: bits affected by both partitions I0 and I1
-params = SIGMA_PARAMS["small_sigma0"]
+params = SIGMA_PARAMS["small_sigma_0"]
 I0, I1, O0, O1, O2 = get_split(*params)
 
 #' All these partitions also need to be split with low and high bits in order to be able
@@ -434,7 +434,7 @@ assert (s_h + w_h + s_h + w_h - 2**16 * carry_high, carry_high) in range_check_1
 #' Given the fact that maj and ch take 3 operands, we need for these terms to split
 #' the input space into chunks smaller than 7 bits (3*7 = 21 bits).
 # params = (11, 25, 6)
-params = SIGMA_PARAMS["big_sigma0"]
+params = SIGMA_PARAMS["big_sigma_0"]
 I0, I1, O0, O1, O2 = get_split(*params)
 
 I0_L = I0 & 0xFFFF
@@ -492,7 +492,7 @@ print(
 #' - O0_L, O0_H, O20 = LookupBigSigma0(I0_L, I0_H0, I0_H1)
 #' - O1_L, O1_H, O21 = LookupBigSigma1(I1_L0, I1_L1, I1_H)
 #' - O2_L, O2_H = LookupXOR(O20, O21)
-lookup_big_sigma0 = {
+lookup_big_sigma_0 = {
     (low, high_0, high_1): (
         sigma(low + 2**16 * (high_0 + 2**8 * high_1), *params) & O0_L,
         (sigma(low + 2**16 * (high_0 + 2**8 * high_1), *params) >> 16) & O0_H,
@@ -550,7 +550,7 @@ e_1_high = e_high - e_0_high_0 - 2**8 * e_0_high_1
 e_0_low = e_low - e_1_low_0 - 2**8 * e_1_low_1
 
 #' Lookup intermediate values (this also range check the 6 limbs): 8T + 3L
-o0_l, o0_h, o20 = lookup_big_sigma0[(e_0_low, e_0_high_0, e_0_high_1)]
+o0_l, o0_h, o20 = lookup_big_sigma_0[(e_0_low, e_0_high_0, e_0_high_1)]
 o1_l, o1_h, o21 = lookup_big_sigma1[(e_1_low_0, e_1_low_1, e_1_high)]
 o2_l, o2_h = lookup_xor[(o20, o21)]
 

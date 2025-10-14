@@ -2,7 +2,7 @@ use core::str;
 
 use crate::partitions::{pext_u32, Sigma0 as Sigma0Partitions, SubsetIterator};
 use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::small_sigma0;
+use crate::sha256::small_sigma_0;
 use itertools::Itertools;
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_prover::core::backend::simd::column::BaseColumn;
@@ -17,7 +17,7 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(I0, N_I1_COLUMNS);
+relation!(I0, N_IO_COLUMNS);
 relation!(I1, N_I1_COLUMNS);
 relation!(O2, N_O2_COLUMNS);
 
@@ -44,16 +44,6 @@ impl Relation {
             o2: O2::draw(channel),
         }
     }
-}
-
-/// Lookup data for the Sigma0 function.
-/// The small_sigma0 function is emulated with 3 lookups, one for each partition I0, I1,
-/// and a final lookup for O2 xor.
-#[derive(Debug, Clone)]
-pub struct LookupData {
-    pub i0: [BaseColumn; N_IO_COLUMNS], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub i1: [BaseColumn; N_I1_COLUMNS], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
 }
 
 pub struct Columns;
@@ -97,7 +87,7 @@ impl PreProcessedColumn for Columns {
         // I0 lookup
         let domain_i0 = CanonicCoset::new(Sigma0Partitions::I0.count_ones()).circle_domain();
         let i0_columns = SubsetIterator::new(Sigma0Partitions::I0)
-            .map(|x| (x, small_sigma0(x)))
+            .map(|x| (x, small_sigma_0(x)))
             .map(|(x, y)| {
                 (
                     BaseField::from_u32_unchecked(x & Sigma0Partitions::I0_L),
@@ -139,7 +129,7 @@ impl PreProcessedColumn for Columns {
         // I1 lookup
         let domain_i1 = CanonicCoset::new(Sigma0Partitions::I1.count_ones()).circle_domain();
         let i1_columns = SubsetIterator::new(Sigma0Partitions::I1)
-            .map(|x| (x, small_sigma0(x)))
+            .map(|x| (x, small_sigma_0(x)))
             .map(|(x, y)| {
                 (
                     BaseField::from_u32_unchecked(x & Sigma0Partitions::I1_L),
@@ -411,7 +401,7 @@ mod tests {
         let (o2_l, o2_h) = lookup_o2_value.unwrap();
 
         // Check the result
-        let expected = small_sigma0(x_low + (x_high << 16));
+        let expected = small_sigma_0(x_low + (x_high << 16));
         assert_eq!(o0_l + o1_l + o2_l, expected & 0xffff);
         assert_eq!(o0_h + o1_h + o2_h, expected >> 16);
     }

@@ -1,6 +1,6 @@
 //! The scheduling component is responsible for proving the scheduling part of sha256.
 //!
-//! This is, 48 iterations of the main loop, doing sigma0, sigma1 and adding the
+//! This is, 48 iterations of the main loop, doing sigma_0, sigma1 and adding the
 //! results with some previous W values to the current W value.
 //! The W array is actually write-once in the sense that no value is updated.
 //! For the AIR, we just need to define an encoding for a row
@@ -11,10 +11,10 @@
 //!
 //! - row[0: 128] = the resulting W array, decomposed in low and high parts
 //!
-//! For sigma0, only indexes from 1..=48 are used. Each operation requires
+//! For sigma_0, only indexes from 1..=48 are used. Each operation requires
 //! to hint the decomposition over I0 and the 3 output values, so 5 columns, or 5*48=240 columns.
 //!
-//! - row[128:(128 + 240)] = sigma0 values
+//! - row[128:(128 + 240)] = sigma_0 values
 //!
 //! For sigma1, only indexes from 14..=61 are used. Each operation requires
 //! to hint the decomposition over I0 and the 3 output values, so 5 columns, or 5*48=240 columns.
@@ -28,7 +28,7 @@
 //!
 //! In short, the main trace of the AIR is then defined as follows:
 //! - row[0: 128] = W
-//! - row[128:368] = sigma0 values
+//! - row[128:368] = sigma_0 values
 //! - row[368:608] = sigma1 values
 //! - row[608:704] = the carries
 
@@ -38,7 +38,7 @@ use crate::components::scheduling::columns::{
 use crate::components::W_SIZE;
 use crate::partitions::{pext_u32x16, Sigma0, Sigma1};
 use crate::relations::Relations;
-use crate::sha256::{small_sigma0_u32x16, small_sigma1_u32x16};
+use crate::sha256::{small_sigma1_u32x16, small_sigma_0_u32x16};
 use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
 use stwo_prover::constraint_framework::Relation;
 use stwo_prover::core::backend::simd::column::BaseColumn;
@@ -53,8 +53,8 @@ use stwo_prover::core::ColumnVec;
 use tracing::span;
 use tracing::Level;
 
-use crate::combine;
 use crate::CHUNK_SIZE;
+use crate::{combine, write_col};
 use std::simd::u32x16;
 
 mod columns;
@@ -135,29 +135,29 @@ pub fn gen_trace(
             // Decomposition over I0
             let w_15_i0_low = w_15_low & u32x16::splat(Sigma0::I0_L);
             let w_15_i0_high = w_15_high & u32x16::splat(Sigma0::I0_H);
-            let sigma0 = small_sigma0_u32x16(w_15_i0_low + (w_15_i0_high << 16));
-            let sigma0_o0_low = sigma0 & u32x16::splat(Sigma0::O0_L);
-            let sigma0_o0_high = (sigma0 >> 16) & u32x16::splat(Sigma0::O0_H);
-            let sigma0_o20 = sigma0 & u32x16::splat(Sigma0::O2);
-            let sigma0_o20_pext = pext_u32x16(sigma0_o20, Sigma0::O2);
+            let sigma_0 = small_sigma_0_u32x16(w_15_i0_low + (w_15_i0_high << 16));
+            let sigma_0_o0_low = sigma_0 & u32x16::splat(Sigma0::O0_L);
+            let sigma_0_o0_high = (sigma_0 >> 16) & u32x16::splat(Sigma0::O0_H);
+            let sigma_0_o20 = sigma_0 & u32x16::splat(Sigma0::O2);
+            let sigma_0_o20_pext = pext_u32x16(sigma_0_o20, Sigma0::O2);
 
             // Decomposition over I1
             let w_15_i1_low = w_15_low & u32x16::splat(Sigma0::I1_L);
             let w_15_i1_high = w_15_high & u32x16::splat(Sigma0::I1_H);
-            let sigma0 = small_sigma0_u32x16(w_15_i1_low + (w_15_i1_high << 16));
-            let sigma0_o1_low = sigma0 & u32x16::splat(Sigma0::O1_L);
-            let sigma0_o1_high = (sigma0 >> 16) & u32x16::splat(Sigma0::O1_H);
-            let sigma0_o21 = sigma0 & u32x16::splat(Sigma0::O2);
-            let sigma0_o21_pext = pext_u32x16(sigma0_o21, Sigma0::O2);
+            let sigma_0 = small_sigma_0_u32x16(w_15_i1_low + (w_15_i1_high << 16));
+            let sigma_0_o1_low = sigma_0 & u32x16::splat(Sigma0::O1_L);
+            let sigma_0_o1_high = (sigma_0 >> 16) & u32x16::splat(Sigma0::O1_H);
+            let sigma_0_o21 = sigma_0 & u32x16::splat(Sigma0::O2);
+            let sigma_0_o21_pext = pext_u32x16(sigma_0_o21, Sigma0::O2);
 
             // XOR the two O2 values
-            let sigma0_o2 = sigma0_o20 ^ sigma0_o21;
-            let sigma0_o2_low = sigma0_o2 & u32x16::splat(0xffff);
-            let sigma0_o2_high = sigma0_o2 >> 16;
+            let sigma_0_o2 = sigma_0_o20 ^ sigma_0_o21;
+            let sigma_0_o2_low = sigma_0_o2 & u32x16::splat(0xffff);
+            let sigma_0_o2_high = sigma_0_o2 >> 16;
 
-            // Compute sigma0 output
-            let sigma0_low = sigma0_o0_low + sigma0_o1_low + sigma0_o2_low;
-            let sigma0_high = sigma0_o0_high + sigma0_o1_high + sigma0_o2_high;
+            // Compute sigma_0 output
+            let sigma_0_low = sigma_0_o0_low + sigma_0_o1_low + sigma_0_o2_low;
+            let sigma_0_high = sigma_0_o0_high + sigma_0_o1_high + sigma_0_o2_high;
 
             // SIGMA1
             // Decomposition over I0
@@ -188,8 +188,8 @@ pub fn gen_trace(
             let sigma1_high = sigma1_o0_high + sigma1_o1_high + sigma1_o2_high;
 
             // Compute the final output
-            let round_low = w_16_low + sigma0_low + w_7_low + sigma1_low;
-            let round_high = w_16_high + sigma0_high + w_7_high + sigma1_high;
+            let round_low = w_16_low + sigma_0_low + w_7_low + sigma1_low;
+            let round_high = w_16_high + sigma_0_high + w_7_high + sigma1_high;
             let carry_low = round_low >> 16;
             let carry_high = (round_high + carry_low) >> 16;
             let new_w_low = round_low - (carry_low << 16);
@@ -198,14 +198,14 @@ pub fn gen_trace(
             let trace_values: RoundColumns<u32x16> = RoundColumns {
                 w_15_i0_low,
                 w_15_i0_high,
-                sigma0_o0_low,
-                sigma0_o0_high,
-                sigma0_o20_pext,
-                sigma0_o1_low,
-                sigma0_o1_high,
-                sigma0_o21_pext,
-                sigma0_o2_low,
-                sigma0_o2_high,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high,
                 w_2_i0_low,
                 w_2_i0_high,
                 sigma1_o0_low,
@@ -226,16 +226,16 @@ pub fn gen_trace(
             let interaction_values: InteractionColumns<u32x16> = InteractionColumns {
                 w_15_i0_low,
                 w_15_i0_high,
-                sigma0_o0_low,
-                sigma0_o0_high,
-                sigma0_o20_pext,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext,
                 w_15_i1_low,
                 w_15_i1_high,
-                sigma0_o1_low,
-                sigma0_o1_high,
-                sigma0_o21_pext,
-                sigma0_o2_low,
-                sigma0_o2_high,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high,
                 w_2_i0_low,
                 w_2_i0_high,
                 sigma1_o0_low,
@@ -295,117 +295,93 @@ pub fn gen_interaction_trace(
     for round in 0..N_ROUNDS {
         let base_index = W_SIZE + round * INTERACTION_COL_PER_ROUND;
 
-        let mut col = interaction_trace.new_col();
-        for vec_row in 0..simd_size {
-            let sigma_0_i0 = combine!(
-                relations.sigma_0.i0,
-                lookup_data,
-                base_index,
-                vec_row,
-                w_15_i0_low,
-                w_15_i0_high,
-                sigma0_o0_low,
-                sigma0_o0_high,
-                sigma0_o20_pext
-            );
-            let sigma_0_i1 = combine!(
-                relations.sigma_0.i1,
-                lookup_data,
-                base_index,
-                vec_row,
-                w_15_i1_low,
-                w_15_i1_high,
-                sigma0_o1_low,
-                sigma0_o1_high,
-                sigma0_o21_pext
-            );
-            let numerator = sigma_0_i0 + sigma_0_i1;
-            let denom = sigma_0_i0 * sigma_0_i1;
-            col.write_frac(vec_row, numerator, denom);
-        }
-        col.finalize_col();
+        // SIGMA 0
+        let sigma_0_i0 = combine!(
+            relations.sigma_0.i0,
+            lookup_data,
+            base_index,
+            w_15_i0_low,
+            w_15_i0_high,
+            sigma_0_o0_low,
+            sigma_0_o0_high,
+            sigma_0_o20_pext
+        );
+        let sigma_0_i1 = combine!(
+            relations.sigma_0.i1,
+            lookup_data,
+            base_index,
+            w_15_i1_low,
+            w_15_i1_high,
+            sigma_0_o1_low,
+            sigma_0_o1_high,
+            sigma_0_o21_pext
+        );
+        let sigma_0_o2 = combine!(
+            relations.sigma_0.o2,
+            lookup_data,
+            base_index,
+            sigma_0_o20_pext,
+            sigma_0_o21_pext,
+            sigma_0_o2_low,
+            sigma_0_o2_high
+        );
+        // SIGMA 1
+        let sigma_1_i0 = combine!(
+            relations.sigma_1.i0,
+            lookup_data,
+            base_index,
+            w_2_i0_low,
+            w_2_i0_high,
+            sigma1_o0_low,
+            sigma1_o0_high,
+            sigma1_o20_pext
+        );
+        let sigma_1_i1 = combine!(
+            relations.sigma_1.i1,
+            lookup_data,
+            base_index,
+            w_2_i1_low,
+            w_2_i1_high,
+            sigma1_o1_low,
+            sigma1_o1_high,
+            sigma1_o21_pext
+        );
+        let sigma_1_o2 = combine!(
+            relations.sigma_1.o2,
+            lookup_data,
+            base_index,
+            sigma1_o20_pext,
+            sigma1_o21_pext,
+            sigma1_o2_low,
+            sigma1_o2_high
+        );
+        // ADD
+        let carry_low = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_w_low,
+            carry_low,
+        );
+        let carry_high = combine!(
+            relations.range_check_add,
+            lookup_data,
+            base_index,
+            new_w_high,
+            carry_high
+        );
 
-        let mut col = interaction_trace.new_col();
-        for vec_row in 0..simd_size {
-            let sigma_0_o2 = combine!(
-                relations.sigma_0.o2,
-                lookup_data,
-                base_index,
-                vec_row,
-                sigma0_o20_pext,
-                sigma0_o21_pext,
-                sigma0_o2_low,
-                sigma0_o2_high
+        let secure_columns = [
+            sigma_0_i0, sigma_0_i1, sigma_0_o2, sigma_1_i0, sigma_1_i1, sigma_1_o2, carry_low,
+            carry_high,
+        ];
+        for i in 0..(secure_columns.len() / 2) {
+            write_col!(
+                secure_columns[2 * i],
+                secure_columns[2 * i + 1],
+                interaction_trace
             );
-            let sigma_1_i0 = combine!(
-                relations.sigma_1.i0,
-                lookup_data,
-                base_index,
-                vec_row,
-                w_2_i0_low,
-                w_2_i0_high,
-                sigma1_o0_low,
-                sigma1_o0_high,
-                sigma1_o20_pext
-            );
-            let numerator = sigma_1_i0 + sigma_0_o2;
-            let denom = sigma_1_i0 * sigma_0_o2;
-            col.write_frac(vec_row, numerator, denom);
         }
-        col.finalize_col();
-
-        let mut col = interaction_trace.new_col();
-        for vec_row in 0..simd_size {
-            let sigma_1_i1 = combine!(
-                relations.sigma_1.i1,
-                lookup_data,
-                base_index,
-                vec_row,
-                w_2_i1_low,
-                w_2_i1_high,
-                sigma1_o1_low,
-                sigma1_o1_high,
-                sigma1_o21_pext
-            );
-            let sigma_1_o2 = combine!(
-                relations.sigma_1.o2,
-                lookup_data,
-                base_index,
-                vec_row,
-                sigma1_o20_pext,
-                sigma1_o21_pext,
-                sigma1_o2_low,
-                sigma1_o2_high
-            );
-            let numerator = sigma_1_o2 + sigma_1_i1;
-            let denom = sigma_1_o2 * sigma_1_i1;
-            col.write_frac(vec_row, numerator, denom);
-        }
-        col.finalize_col();
-
-        let mut col = interaction_trace.new_col();
-        for vec_row in 0..simd_size {
-            let carry_low = combine!(
-                relations.range_check_add,
-                lookup_data,
-                base_index,
-                vec_row,
-                new_w_low,
-                carry_low,
-            );
-            let carry_high = combine!(
-                relations.range_check_add,
-                lookup_data,
-                base_index,
-                vec_row,
-                new_w_high,
-                carry_high
-            );
-            let numerator = carry_low + carry_high;
-            let denom = carry_low * carry_high;
-            col.write_frac(vec_row, numerator, denom);
-        }
-        col.finalize_col();
     }
 
     interaction_trace.finalize_last()
@@ -416,7 +392,7 @@ mod tests {
     use stwo_prover::core::backend::Column;
 
     use super::*;
-    use crate::sha256::{small_sigma0, small_sigma1};
+    use crate::sha256::{small_sigma1, small_sigma_0};
 
     #[test]
     fn test_generate_simd_sequence_bulk() {
@@ -468,7 +444,7 @@ mod tests {
                 let w_current = w_current_low + (w_current_high << 16);
                 assert_eq!(
                     w_current,
-                    w_16.overflowing_add(small_sigma0(w_15))
+                    w_16.overflowing_add(small_sigma_0(w_15))
                         .0
                         .overflowing_add(w_7.overflowing_add(small_sigma1(w_2)).0)
                         .0

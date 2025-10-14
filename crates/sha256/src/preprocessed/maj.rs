@@ -5,6 +5,7 @@ use crate::sha256::maj;
 use itertools::Itertools;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
+use stwo_prover::core::channel::Channel;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
@@ -12,19 +13,48 @@ use stwo_prover::relation;
 
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 
+// [a, b, c, val]
 const N_COLUMNS: usize = 4;
 
-relation!(Relation, 5);
-/// Lookup data for the Maj function.
-/// The maj function is emulated with 6 lookups, one for each partition I0, I1,
-/// and a final lookup for O2 xor.
-pub struct LookupData {
-    pub i0_l: [BaseColumn; N_COLUMNS],   // [a, b, c, o_io_l]
-    pub i0_h_0: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]
-    pub i0_h_1: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]
-    pub i1_l_0: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]
-    pub i1_l_1: [BaseColumn; N_COLUMNS], // [a, b, c, o_io_h_0]
-    pub i1_h: [BaseColumn; N_COLUMNS],   // [a, b, c, o_io_h_0]
+relation!(I0_L, N_COLUMNS);
+relation!(I0_H0, N_COLUMNS);
+relation!(I0_H1, N_COLUMNS);
+relation!(I1_L0, N_COLUMNS);
+relation!(I1_L1, N_COLUMNS);
+relation!(I1_H, N_COLUMNS);
+
+#[derive(Debug, Clone)]
+pub struct Relation {
+    pub i0_low: I0_L,
+    pub i0_high_0: I0_H0,
+    pub i0_high_1: I0_H1,
+    pub i1_low_0: I1_L0,
+    pub i1_low_1: I1_L1,
+    pub i1_high: I1_H,
+}
+
+impl Relation {
+    pub fn dummy() -> Self {
+        Self {
+            i0_low: I0_L::dummy(),
+            i0_high_0: I0_H0::dummy(),
+            i0_high_1: I0_H1::dummy(),
+            i1_low_0: I1_L0::dummy(),
+            i1_low_1: I1_L1::dummy(),
+            i1_high: I1_H::dummy(),
+        }
+    }
+
+    pub fn draw(channel: &mut impl Channel) -> Self {
+        Self {
+            i0_low: I0_L::draw(channel),
+            i0_high_0: I0_H0::draw(channel),
+            i0_high_1: I0_H1::draw(channel),
+            i1_low_0: I1_L0::draw(channel),
+            i1_low_1: I1_L1::draw(channel),
+            i1_high: I1_H::draw(channel),
+        }
+    }
 }
 
 pub struct Columns;
@@ -243,7 +273,6 @@ mod tests {
     }
 
     #[test]
-    /* trunk-ignore(clippy/cognitive_complexity) */
     fn test_gen_column_simd() {
         let columns = Columns.gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS * 6);

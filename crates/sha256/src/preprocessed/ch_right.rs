@@ -5,6 +5,7 @@ use crate::sha256::ch_right;
 use itertools::Itertools;
 use stwo_prover::core::backend::simd::column::BaseColumn;
 use stwo_prover::core::backend::simd::SimdBackend;
+use stwo_prover::core::channel::Channel;
 use stwo_prover::core::fields::m31::BaseField;
 use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
 use stwo_prover::core::poly::BitReversedOrder;
@@ -12,17 +13,40 @@ use stwo_prover::relation;
 
 use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
 
+// [e, f, val]
 const N_COLUMNS: usize = 3;
 
-relation!(Relation, 4);
-/// Lookup data for the ch_right function.
-/// The ch_right function is emulated with 6 lookups, one for each partition I0, I1,
-/// and a final lookup for O2 xor.
-pub struct LookupData {
-    pub i0_l: [BaseColumn; N_COLUMNS], // [e, f, o_io_l]
-    pub i0_h: [BaseColumn; N_COLUMNS], // [e, f, o_io_h]
-    pub i1_l: [BaseColumn; N_COLUMNS], // [e, f, o_i1_l]
-    pub i1_h: [BaseColumn; N_COLUMNS], // [e, f, o_i1_h]
+relation!(I0_L, N_COLUMNS);
+relation!(I0_H, N_COLUMNS);
+relation!(I1_L, N_COLUMNS);
+relation!(I1_H, N_COLUMNS);
+
+#[derive(Debug, Clone)]
+pub struct Relation {
+    pub i0_low: I0_L,
+    pub i0_high: I0_H,
+    pub i1_low: I1_L,
+    pub i1_high: I1_H,
+}
+
+impl Relation {
+    pub fn dummy() -> Self {
+        Self {
+            i0_low: I0_L::dummy(),
+            i0_high: I0_H::dummy(),
+            i1_low: I1_L::dummy(),
+            i1_high: I1_H::dummy(),
+        }
+    }
+
+    pub fn draw(channel: &mut impl Channel) -> Self {
+        Self {
+            i0_low: I0_L::draw(channel),
+            i0_high: I0_H::draw(channel),
+            i1_low: I1_L::draw(channel),
+            i1_high: I1_H::draw(channel),
+        }
+    }
 }
 
 pub struct Columns;

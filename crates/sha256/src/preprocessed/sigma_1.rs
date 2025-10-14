@@ -16,7 +16,7 @@ const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(I0, N_I1_COLUMNS);
+relation!(I0, N_IO_COLUMNS);
 relation!(I1, N_I1_COLUMNS);
 relation!(O2, N_O2_COLUMNS);
 
@@ -43,16 +43,6 @@ impl Relation {
             o2: O2::draw(channel),
         }
     }
-}
-
-/// Lookup data for the Sigma1 function.
-/// The sigma1 function is emulated with 3 lookups, one for each partition I0, I1,
-/// and a final lookup for O2 xor.
-#[derive(Debug, Clone)]
-pub struct LookupData {
-    pub i0: [BaseColumn; N_IO_COLUMNS], // [i0_l, i0_h, o0_l, o0_h, o20]
-    pub i1: [BaseColumn; N_I1_COLUMNS], // [i1_l, i1_h, o1_l, o1_h, o21]
-    pub o2: [BaseColumn; N_O2_COLUMNS], // [o20, o21, o2_l, o2_h]
 }
 
 pub struct Columns;
