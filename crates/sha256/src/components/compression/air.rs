@@ -354,18 +354,30 @@ fn eval_compression_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relation
             - a_carry_high.clone() * E::F::from(M31::from(1 << 16));
 
         // ADD
-        add_to_relation!(eval, relations.range_check_add, one, new_e_low, e_carry_low);
         add_to_relation!(
             eval,
-            relations.range_check_add,
+            relations.range_check_add.add_7,
+            one,
+            new_e_low,
+            e_carry_low
+        );
+        add_to_relation!(
+            eval,
+            relations.range_check_add.add_7,
             one,
             new_e_high,
             e_carry_high,
         );
-        add_to_relation!(eval, relations.range_check_add, one, new_a_low, a_carry_low);
         add_to_relation!(
             eval,
-            relations.range_check_add,
+            relations.range_check_add.add_8,
+            one,
+            new_a_low,
+            a_carry_low
+        );
+        add_to_relation!(
+            eval,
+            relations.range_check_add.add_8,
             one,
             new_a_high,
             a_carry_high,

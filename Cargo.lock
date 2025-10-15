@@ -932,6 +932,8 @@ dependencies = [
  "itertools 0.13.0",
  "num-traits",
  "paste",
+ "peak_alloc",
+ "rayon",
  "serde",
  "serde_json",
  "stwo",

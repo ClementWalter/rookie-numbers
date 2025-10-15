@@ -763,28 +763,28 @@ pub fn gen_interaction_trace(
         );
         // ADD
         let e_carry_low = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_7,
             lookup_data,
             base_index,
             new_e_low,
             e_carry_low,
         );
         let e_carry_high = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_7,
             lookup_data,
             base_index,
             new_e_high,
             e_carry_high,
         );
         let a_carry_low = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_8,
             lookup_data,
             base_index,
             new_a_low,
             a_carry_low,
         );
         let a_carry_high = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_8,
             lookup_data,
             base_index,
             new_a_high,

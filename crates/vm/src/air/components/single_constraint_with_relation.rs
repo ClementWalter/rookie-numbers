@@ -105,6 +105,7 @@ impl InteractionClaim {
         let mut interaction_trace = LogupTraceGenerator::new(log_size + LOG_N_LANES);
 
         let mut col = interaction_trace.new_col();
+        #[cfg(feature = "parallel")]
         (col.par_iter_mut(), &lookup_data.memory)
             .into_par_iter()
             .for_each(|(writer, value)| {

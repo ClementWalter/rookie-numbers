@@ -134,10 +134,16 @@ fn eval_scheduling_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations
         );
 
         // ADD
-        add_to_relation!(eval, relations.range_check_add, one, *new_w_low, carry_low);
         add_to_relation!(
             eval,
-            relations.range_check_add,
+            relations.range_check_add.add_4,
+            one,
+            *new_w_low,
+            carry_low
+        );
+        add_to_relation!(
+            eval,
+            relations.range_check_add.add_4,
             one,
             *new_w_high,
             carry_high

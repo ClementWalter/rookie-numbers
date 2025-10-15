@@ -16,3 +16,10 @@ bincode.workspace = true
 itertools.workspace = true
 paste.workspace = true
 test-log.workspace = true
+peak_alloc.workspace = true
+rayon.workspace = true
+
+[features]
+slow-tests = []
+parallel = ["stwo/parallel", "stwo-constraint-framework/parallel"]
+default = []

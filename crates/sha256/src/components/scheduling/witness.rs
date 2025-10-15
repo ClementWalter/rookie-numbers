@@ -361,14 +361,14 @@ pub fn gen_interaction_trace(
         );
         // ADD
         let carry_low = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_4,
             lookup_data,
             base_index,
             new_w_low,
             carry_low,
         );
         let carry_high = combine!(
-            relations.range_check_add,
+            relations.range_check_add.add_4,
             lookup_data,
             base_index,
             new_w_high,

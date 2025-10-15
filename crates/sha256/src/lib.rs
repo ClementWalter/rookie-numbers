@@ -104,14 +104,48 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use tracing::info;
 
     use super::*;
 
+    use peak_alloc::PeakAlloc;
+
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+    use std::time::Instant;
+
+    #[global_allocator]
+    static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
+    #[cfg_attr(not(feature = "slow-tests"), ignore)]
     #[test_log::test]
     fn test_prove_sha256() {
-        let log_size = 18;
+        #[cfg(feature = "parallel")]
+        info!("Parallel");
+        #[cfg(not(feature = "parallel"))]
+        info!("Non-parallel");
+
+        // Get from environment variable:
+        let log_n_instances = env::var("LOG_N_INSTANCES")
+            .unwrap_or_else(|_| "15".to_string())
+            .parse::<u32>()
+            .unwrap();
+        let log_size = log_n_instances;
         info!("Log size: {}", log_size);
-        prove_sha256(log_size, PcsConfig::default());
+        PEAK_ALLOC.reset_peak_usage();
+        let span = span!(Level::INFO, "Prove").entered();
+
+        let n_iters: usize = 8;
+        let start = Instant::now();
+        (0..n_iters)
+            .into_par_iter()
+            .map(|_| prove_sha256(log_size, PcsConfig::default()))
+            .collect::<Vec<_>>();
+        span.exit();
+        info!("Throughput {:?}", (1<<log_n_instances) as f32*n_iters as f32/start.elapsed().as_secs() as f32);
+
+        let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
+        info!("Peak memory: {} MB", peak_bytes);
     }
 }
