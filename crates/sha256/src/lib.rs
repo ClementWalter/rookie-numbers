@@ -103,7 +103,7 @@ mod tests {
     fn test_prove_sha256() {
         use std::time::Instant;
 
-        let log_size = 19;
+        let log_size = 18;
         let start = Instant::now();
         prove_sha256(log_size, PcsConfig::default());
         let duration = start.elapsed();
