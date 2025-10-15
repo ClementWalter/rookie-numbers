@@ -4,6 +4,14 @@ Last year, [Shahar Papini tweet](https://x.com/PapiniShahar/status/1831402791400
 
 ## How to run
 
+- Various components benchmarks
+
 ```bash
 RUSTFLAGS="-C target-cpu=native" cargo test -r -- test_prove_rookie
+```
+
+- Sha256 benchmarks
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo test -r test_prove_sha256 -- --nocapture --ignored
 ```
