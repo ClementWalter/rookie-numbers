@@ -1,5 +1,5 @@
 use peak_alloc::PeakAlloc;
-use stwo_prover::core::vcs::blake2_merkle::Blake2sMerkleChannel;
+use stwo::core::vcs::blake2_merkle::Blake2sMerkleChannel;
 use vm::prover::prove_rookie;
 
 #[global_allocator]

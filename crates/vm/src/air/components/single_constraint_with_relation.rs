@@ -1,31 +1,34 @@
-use crate::air::relations;
 use num_traits::identities::One;
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use stwo_air_utils::trace::component_trace::ComponentTrace;
-use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
-use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
-use stwo_prover::constraint_framework::Relation;
-use stwo_prover::constraint_framework::RelationEntry;
-use stwo_prover::core::backend::simd::m31::PackedM31;
-use stwo_prover::core::backend::simd::m31::LOG_N_LANES;
-use stwo_prover::core::backend::simd::qm31::PackedQM31;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::fields::qm31::SecureField;
-use stwo_prover::core::fields::secure_column::SECURE_EXTENSION_DEGREE;
-use stwo_prover::core::poly::circle::CircleEvaluation;
-use stwo_prover::core::poly::BitReversedOrder;
-use stwo_prover::{
-    constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval},
+use stwo::{
     core::{
-        backend::{simd::SimdBackend, BackendForChannel},
         channel::{Channel, MerkleChannel},
-        fields::m31::M31,
+        fields::{
+            m31::{BaseField, M31},
+            qm31::{SecureField, SECURE_EXTENSION_DEGREE},
+        },
         pcs::TreeVec,
     },
+    prover::{
+        backend::{
+            simd::{
+                m31::{PackedM31, LOG_N_LANES},
+                qm31::PackedQM31,
+                SimdBackend,
+            },
+            BackendForChannel,
+        },
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
 };
+use stwo_air_utils::trace::component_trace::ComponentTrace;
+use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+use stwo_constraint_framework::{
+    EvalAtRow, FrameworkComponent, FrameworkEval, LogupTraceGenerator, Relation, RelationEntry,
+};
+
+use crate::air::relations;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct Claim {

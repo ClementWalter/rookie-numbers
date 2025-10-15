@@ -1,17 +1,17 @@
 use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
-pub use stwo_air_utils::trace::component_trace::ComponentTrace;
-pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
-pub use stwo_prover::core::backend::simd::m31::PackedM31;
-use stwo_prover::{
-    constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval},
+pub use stwo::prover::backend::simd::m31::PackedM31;
+use stwo::{
     core::{
-        backend::{simd::SimdBackend, BackendForChannel},
         channel::{Channel, MerkleChannel},
         fields::m31::M31,
         pcs::TreeVec,
     },
+    prover::backend::{simd::SimdBackend, BackendForChannel},
 };
+pub use stwo_air_utils::trace::component_trace::ComponentTrace;
+pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval};
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct Claim<const N: usize> {

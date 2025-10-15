@@ -1,10 +1,13 @@
 //! A collection of preprocessed columns, whose values are publicly acknowledged, and independent of
 //! the proof.
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::poly::circle::CircleEvaluation;
-use stwo_prover::core::poly::BitReversedOrder;
+use stwo::{
+    core::fields::m31::BaseField,
+    prover::{
+        backend::simd::SimdBackend,
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 
 pub trait PreProcessedColumn {
     fn log_size(&self) -> u32;

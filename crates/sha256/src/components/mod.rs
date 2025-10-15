@@ -1,10 +1,14 @@
 use std::simd::u32x16;
 
-use stwo_prover::core::{
-    backend::simd::{m31::LOG_N_LANES, SimdBackend},
-    fields::{m31::BaseField, qm31::SecureField},
-    poly::{circle::CircleEvaluation, BitReversedOrder},
-    ColumnVec,
+use stwo::{
+    core::{
+        fields::{m31::BaseField, qm31::SecureField},
+        ColumnVec,
+    },
+    prover::{
+        backend::simd::{m31::LOG_N_LANES, SimdBackend},
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
 };
 use tracing::{span, Level};
 
@@ -25,14 +29,19 @@ pub fn gen_trace(
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     LookupData,
 ) {
-    let _span = span!(Level::INFO, "Generation").entered();
     assert!(log_size >= LOG_N_LANES);
 
     let mut trace: Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> =
         Vec::with_capacity(scheduling::witness::N_COLUMNS + compression::witness::N_COLUMNS);
+
+    let span = span!(Level::INFO, "Scheduling").entered();
     let (scheduling_trace, scheduling_lookup_data) = scheduling::witness::gen_trace(log_size);
+    span.exit();
+
+    let span = span!(Level::INFO, "Compression").entered();
     let (compression_trace, compression_lookup_data) =
         compression::witness::gen_trace(&scheduling_trace);
+    span.exit();
 
     let lookup_data = LookupData {
         scheduling: scheduling_lookup_data,
@@ -52,21 +61,23 @@ pub fn gen_interaction_trace(
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     ClaimedSum,
 ) {
-    let _span = span!(Level::INFO, "Generate interaction trace").entered();
-
     let mut interaction_trace: Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> =
         Vec::with_capacity(
             scheduling::witness::N_INTERACTION_COLUMNS
                 + compression::witness::N_INTERACTION_COLUMNS,
         );
 
+    let span = span!(Level::INFO, "Scheduling").entered();
     let (scheduling_interaction_trace, scheduling_claimed_sum) =
         scheduling::witness::gen_interaction_trace(&lookup_data.scheduling, relations);
     interaction_trace.extend(scheduling_interaction_trace);
+    span.exit();
 
+    let span = span!(Level::INFO, "Compression").entered();
     let (compression_interaction_trace, compression_claimed_sum) =
         compression::witness::gen_interaction_trace(&lookup_data.compression, relations);
     interaction_trace.extend(compression_interaction_trace);
+    span.exit();
 
     (
         interaction_trace,
@@ -95,7 +106,7 @@ macro_rules! round_columns {
         impl<T> $name<T> {
             pub fn from_eval<E>(eval: &mut E) -> Self
             where
-                E: stwo_prover::constraint_framework::EvalAtRow<F = T>,
+                E: stwo_constraint_framework::EvalAtRow<F = T>,
             {
                 Self {
                     $($column: eval.next_trace_mask(),)*
@@ -120,11 +131,11 @@ macro_rules! combine {
         let mut combined = Vec::with_capacity(simd_size);
         for vec_row in 0..simd_size {
             unsafe {
-                let denom: stwo_prover::core::backend::simd::qm31::PackedQM31 =
+                let denom: stwo::prover::backend::simd::qm31::PackedQM31 =
                     $relations.combine(
                         [
                             $(
-                                stwo_prover::core::backend::simd::m31::PackedM31::from_simd_unchecked(
+                                stwo::prover::backend::simd::m31::PackedM31::from_simd_unchecked(
                                     $data[$base_index + InteractionColumnsIndex::$col as usize][vec_row],
                                 ),
                             )+
@@ -142,25 +153,25 @@ macro_rules! combine {
 pub fn combine_w(
     relations: &Relations,
     data: &[Vec<u32x16>],
-) -> Vec<stwo_prover::core::backend::simd::qm31::PackedQM31> {
+) -> Vec<stwo::prover::backend::simd::qm31::PackedQM31> {
+    use stwo_constraint_framework::Relation;
+
     use crate::components::W_SIZE;
-    use stwo_prover::constraint_framework::Relation;
 
     let simd_size = data[0].len();
     let mut combined = Vec::with_capacity(simd_size);
     for vec_row in 0..simd_size {
         unsafe {
-            let values: [stwo_prover::core::backend::simd::m31::PackedM31; W_SIZE] = (0..W_SIZE)
+            let values: [stwo::prover::backend::simd::m31::PackedM31; W_SIZE] = (0..W_SIZE)
                 .map(|i| {
-                    stwo_prover::core::backend::simd::m31::PackedM31::from_simd_unchecked(
+                    stwo::prover::backend::simd::m31::PackedM31::from_simd_unchecked(
                         data[i][vec_row],
                     )
                 })
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
-            let denom: stwo_prover::core::backend::simd::qm31::PackedQM31 =
-                relations.w.combine(&values);
+            let denom: stwo::prover::backend::simd::qm31::PackedQM31 = relations.w.combine(&values);
             combined.push(denom);
         }
     }
@@ -184,7 +195,7 @@ macro_rules! write_col {
 #[macro_export]
 macro_rules! add_to_relation {
     ($eval:expr, $relation:expr, $numerator:expr, $($col:expr),+ $(,)?) => {{
-        $eval.add_to_relation(stwo_prover::constraint_framework::RelationEntry::new(
+        $eval.add_to_relation(stwo_constraint_framework::RelationEntry::new(
             &$relation,
             $numerator.clone(),
             &[$($col.clone()),*],

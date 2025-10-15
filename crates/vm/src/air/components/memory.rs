@@ -1,13 +1,19 @@
+use std::collections::HashMap;
+
 use num_traits::One;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::HashMap;
-use stwo_prover::constraint_framework::{
-    EvalAtRow, FrameworkComponent, FrameworkEval, Relation, RelationEntry,
-};
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::{
-    constraint_framework::logup::LogupTraceGenerator,
+use serde::{Deserialize, Serialize};
+use stwo::{
     core::{
+        channel::{Channel, MerkleChannel},
+        fields::{
+            m31::{BaseField, M31},
+            qm31::{SecureField, SECURE_EXTENSION_DEGREE},
+        },
+        pcs::TreeVec,
+        poly::circle::CanonicCoset,
+    },
+    prover::{
         backend::{
             simd::{
                 column::BaseColumn,
@@ -17,18 +23,14 @@ use stwo_prover::{
             },
             BackendForChannel,
         },
-        channel::{Channel, MerkleChannel},
-        fields::{m31::M31, qm31::SecureField, secure_column::SECURE_EXTENSION_DEGREE},
-        pcs::TreeVec,
-        poly::{
-            circle::{CanonicCoset, CircleEvaluation},
-            BitReversedOrder,
-        },
+        poly::{circle::CircleEvaluation, BitReversedOrder},
     },
+};
+use stwo_constraint_framework::{
+    EvalAtRow, FrameworkComponent, FrameworkEval, LogupTraceGenerator, Relation, RelationEntry,
 };
 
 use crate::air::relations;
-use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Default, Serialize, Deserialize)]
 pub struct Claim {

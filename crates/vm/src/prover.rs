@@ -1,21 +1,32 @@
-use crate::air::components::{Claim, Components, InteractionClaim, Relations};
-use crate::air::preprocessed::PreProcessedTrace;
-use crate::air::relations;
-use crate::air::Proof;
-use num_traits::Zero;
 use std::time::Instant;
-use stwo_prover::constraint_framework::TraceLocationAllocator;
-use stwo_prover::core::fields::qm31::SecureField;
-use stwo_prover::core::proof_of_work::GrindOps;
 
-use crate::errors::{ProvingError, VerificationError};
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::backend::BackendForChannel;
-use stwo_prover::core::channel::{Channel, MerkleChannel};
-use stwo_prover::core::pcs::{CommitmentSchemeProver, CommitmentSchemeVerifier, PcsConfig};
-use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
-use stwo_prover::core::prover::{prove, verify, VerificationError as StwoVerificationError};
-use tracing::{info, span, Level};
+use num_traits::Zero;
+use stwo::{
+    core::{
+        channel::{Channel, MerkleChannel},
+        fields::qm31::SecureField,
+        pcs::{CommitmentSchemeVerifier, PcsConfig},
+        poly::circle::CanonicCoset,
+        proof_of_work::GrindOps,
+        verifier::{verify, VerificationError as StwoVerificationError},
+    },
+    prover::{
+        backend::{simd::SimdBackend, BackendForChannel},
+        poly::circle::PolyOps,
+        prove, CommitmentSchemeProver,
+    },
+};
+use stwo_constraint_framework::TraceLocationAllocator;
+use tracing::info;
+
+use crate::{
+    air::{
+        components::{Claim, Components, InteractionClaim, Relations},
+        preprocessed::PreProcessedTrace,
+        relations, Proof,
+    },
+    errors::{ProvingError, VerificationError},
+};
 
 pub fn prove_rookie<MC: MerkleChannel, const N: usize>(
     log_size: u32,
@@ -23,8 +34,6 @@ pub fn prove_rookie<MC: MerkleChannel, const N: usize>(
 where
     SimdBackend: BackendForChannel<MC>,
 {
-    let _span = span!(Level::INFO, "prove_rookie").entered();
-
     // Setup protocol.
     let channel = &mut MC::C::default();
 
@@ -88,7 +97,7 @@ where
     // Prove stark.
     info!("prove stark");
     let mut tree_span_provider =
-        TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
+        TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids());
     let components = Components::new(
         &mut tree_span_provider,
         &claim,
@@ -120,8 +129,6 @@ pub fn verify_rookie<MC: MerkleChannel, const N: usize>(
 where
     SimdBackend: BackendForChannel<MC>,
 {
-    let _span = span!(Level::INFO, "verify_rookie").entered();
-
     // Setup protocol.
     let channel = &mut MC::C::default();
 
@@ -150,7 +157,7 @@ where
 
     // Proof of work.
     channel.mix_u64(proof.interaction_pow);
-    if channel.trailing_zeros() < relations::INTERACTION_POW_BITS {
+    if !channel.verify_pow_nonce(relations::INTERACTION_POW_BITS, proof.interaction_pow) {
         return Err(VerificationError::Stwo(StwoVerificationError::ProofOfWork));
     }
 
@@ -171,7 +178,7 @@ where
     // Verify stark.
     info!("verify stark");
     let mut tree_span_provider =
-        TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
+        TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids());
     let components = Components::new(
         &mut tree_span_provider,
         &proof.claim,

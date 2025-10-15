@@ -2,11 +2,14 @@
 //! the proof.
 //!
 //! They are similar to regular components but are entirely known by the verifier.
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::poly::circle::CircleEvaluation;
-use stwo_prover::core::poly::BitReversedOrder;
+use stwo::{
+    core::fields::m31::BaseField,
+    prover::{
+        backend::simd::SimdBackend,
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 
 pub mod big_sigma_0;
 pub mod big_sigma_1;

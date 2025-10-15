@@ -13,15 +13,16 @@
 
 use std::simd::u32x16;
 
-use stwo_prover::core::channel::Channel;
+use stwo::core::channel::Channel;
 
 use crate::preprocessed::{
     big_sigma_0, big_sigma_1, ch_left, ch_right, maj, range_check_add, sigma_0, sigma_1,
 };
 
 mod w {
+    use stwo_constraint_framework::relation;
+
     use crate::components::W_SIZE;
-    use stwo_prover::relation;
     relation!(Relation, W_SIZE);
 }
 

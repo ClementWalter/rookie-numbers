@@ -1,5 +1,6 @@
-use stwo_prover::core::prover::{
-    ProvingError as StwoProvingError, VerificationError as StwoVerificationError,
+use stwo::{
+    core::verifier::VerificationError as StwoVerificationError,
+    prover::ProvingError as StwoProvingError,
 };
 use thiserror::Error;
 

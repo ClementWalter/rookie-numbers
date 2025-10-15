@@ -1,17 +1,18 @@
-use crate::partitions::{BigSigma1 as BigSigma1Partitions, SubsetIterator};
-use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::ch_left;
-
 use itertools::Itertools;
-use stwo_prover::core::backend::simd::column::BaseColumn;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::channel::Channel;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
-use stwo_prover::core::poly::BitReversedOrder;
-use stwo_prover::relation;
+use stwo::{
+    core::{channel::Channel, fields::m31::BaseField, poly::circle::CanonicCoset},
+    prover::{
+        backend::simd::{column::BaseColumn, SimdBackend},
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
 
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
+use crate::{
+    partitions::{BigSigma1 as BigSigma1Partitions, SubsetIterator},
+    preprocessed::PreProcessedColumn,
+    sha256::ch_left,
+};
 
 // [e, f, val]
 const N_COLUMNS: usize = 3;
@@ -134,8 +135,9 @@ impl PreProcessedColumn for Columns {
 mod tests {
     use std::collections::HashMap;
 
+    use stwo::prover::backend::Column;
+
     use super::*;
-    use stwo_prover::core::backend::Column;
 
     #[test]
     fn test_ids() {

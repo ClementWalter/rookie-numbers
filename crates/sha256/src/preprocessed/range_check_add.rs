@@ -1,14 +1,14 @@
-use crate::preprocessed::PreProcessedColumn;
-
 use itertools::Itertools;
-use stwo_prover::core::backend::simd::column::BaseColumn;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
-use stwo_prover::core::poly::BitReversedOrder;
-use stwo_prover::relation;
+use stwo::{
+    core::{fields::m31::BaseField, poly::circle::CanonicCoset},
+    prover::{
+        backend::simd::{column::BaseColumn, SimdBackend},
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
 
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
+use crate::preprocessed::PreProcessedColumn;
 
 // [value, carry_4, carry_6, carry_7]
 const N_COLUMNS: usize = 4;
@@ -83,8 +83,9 @@ impl PreProcessedColumn for Columns {
 
 #[cfg(test)]
 mod tests {
+    use stwo::prover::backend::Column;
+
     use super::*;
-    use stwo_prover::core::backend::Column;
 
     #[test]
     fn test_ids() {

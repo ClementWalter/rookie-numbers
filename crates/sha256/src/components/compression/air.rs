@@ -1,13 +1,12 @@
+use num_traits::One;
+use stwo::core::fields::m31::M31;
+use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval};
+
 use crate::{
     add_to_relation,
     components::compression::columns::RoundColumns,
     relations::Relations,
     sha256::{H, K},
-};
-use num_traits::One;
-use stwo_prover::{
-    constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval},
-    core::fields::m31::M31,
 };
 
 pub type Component = FrameworkComponent<Eval>;
@@ -389,7 +388,7 @@ fn eval_compression_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relation
         hash_buffer[14] = g_low.clone(); // h_low
         hash_buffer[15] = g_high.clone(); // h_high
     }
-    eval.add_to_relation(stwo_prover::constraint_framework::RelationEntry::new(
+    eval.add_to_relation(stwo_constraint_framework::RelationEntry::new(
         &relations.w,
         -one,
         &w,
@@ -419,14 +418,14 @@ impl FrameworkEval for Eval {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use stwo_prover::{
-        constraint_framework::assert_constraints_on_polys,
-        core::{pcs::TreeVec, poly::circle::CanonicCoset},
-    };
+    use stwo::core::{pcs::TreeVec, poly::circle::CanonicCoset};
+    use stwo_constraint_framework::assert_constraints_on_polys;
 
     use super::*;
-    use crate::components::compression::witness::{gen_interaction_trace, gen_trace};
-    use crate::components::scheduling::witness::gen_trace as gen_scheduling_trace;
+    use crate::components::{
+        compression::witness::{gen_interaction_trace, gen_trace},
+        scheduling::witness::gen_trace as gen_scheduling_trace,
+    };
 
     #[test]
     fn test_compression_constraints() {

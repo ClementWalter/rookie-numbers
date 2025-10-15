@@ -1,16 +1,18 @@
 use itertools::Itertools;
-use stwo_prover::constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_prover::core::backend::simd::column::BaseColumn;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::channel::Channel;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::poly::circle::{CanonicCoset, CircleEvaluation};
-use stwo_prover::core::poly::BitReversedOrder;
-use stwo_prover::relation;
+use stwo::{
+    core::{channel::Channel, fields::m31::BaseField, poly::circle::CanonicCoset},
+    prover::{
+        backend::simd::{column::BaseColumn, SimdBackend},
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
 
-use crate::partitions::{pext_u32, BigSigma0 as BigSigma0Partitions, SubsetIterator};
-use crate::preprocessed::PreProcessedColumn;
-use crate::sha256::big_sigma_0;
+use crate::{
+    partitions::{pext_u32, BigSigma0 as BigSigma0Partitions, SubsetIterator},
+    preprocessed::PreProcessedColumn,
+    sha256::big_sigma_0,
+};
 
 const N_IO_COLUMNS: usize = 6;
 const N_I1_COLUMNS: usize = 6;
@@ -231,8 +233,9 @@ impl PreProcessedColumn for Columns {
 mod tests {
     use std::collections::HashMap;
 
+    use stwo::prover::backend::Column;
+
     use super::*;
-    use stwo_prover::core::backend::Column;
 
     const N_COLUMNS: usize = N_IO_COLUMNS + N_I1_COLUMNS + N_O2_COLUMNS;
     #[test]

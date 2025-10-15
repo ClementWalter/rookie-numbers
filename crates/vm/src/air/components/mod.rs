@@ -4,25 +4,26 @@ pub mod single_constraint;
 pub mod single_constraint_with_relation;
 
 use num_traits::Zero;
-pub use stwo_air_utils::trace::component_trace::ComponentTrace;
-pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
-use stwo_prover::core::air::Component as ComponentVerifier;
-pub use stwo_prover::core::backend::simd::m31::PackedM31;
-use stwo_prover::{
-    constraint_framework::TraceLocationAllocator,
+use serde::{Deserialize, Serialize};
+pub use stwo::prover::backend::simd::m31::PackedM31;
+use stwo::{
     core::{
-        air::ComponentProver,
-        backend::{simd::SimdBackend, BackendForChannel},
+        air::Component as ComponentVerifier,
         channel::{Channel, MerkleChannel},
         fields::{m31::M31, qm31::SecureField},
         pcs::TreeVec,
+    },
+    prover::{
+        backend::{simd::SimdBackend, BackendForChannel},
         poly::{circle::CircleEvaluation, BitReversedOrder},
+        ComponentProver,
     },
 };
+pub use stwo_air_utils::trace::component_trace::ComponentTrace;
+pub use stwo_air_utils_derive::{IterMut, ParIterMut, Uninitialized};
+use stwo_constraint_framework::TraceLocationAllocator;
 
 use crate::air::relations;
-
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Claim<const N: usize> {

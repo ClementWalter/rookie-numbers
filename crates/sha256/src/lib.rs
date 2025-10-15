@@ -6,20 +6,24 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
-use stwo_prover::constraint_framework::TraceLocationAllocator;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::channel::Blake2sChannel;
-use stwo_prover::core::pcs::{CommitmentSchemeProver, PcsConfig};
-use stwo_prover::core::poly::circle::{CanonicCoset, PolyOps};
-use stwo_prover::core::prover::{prove, StarkProof};
-use stwo_prover::core::vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
+use stwo::{
+    core::{
+        channel::Blake2sChannel,
+        pcs::PcsConfig,
+        poly::circle::CanonicCoset,
+        proof::StarkProof,
+        vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher},
+    },
+    prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
+};
+use stwo_constraint_framework::TraceLocationAllocator;
+use tracing::{span, Level};
 
-use crate::components::gen_interaction_trace;
-use crate::components::gen_trace;
-use crate::preprocessed::PreProcessedTrace;
-use crate::relations::Relations;
-
-use tracing::{info, span, Level};
+use crate::{
+    components::{gen_interaction_trace, gen_trace},
+    preprocessed::PreProcessedTrace,
+    relations::Relations,
+};
 
 const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
 
@@ -66,8 +70,9 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     span.exit();
 
     // Prove constraints.
+    let span = span!(Level::INFO, "Prove").entered();
     let trace_allocator =
-        &mut TraceLocationAllocator::new_with_preproccessed_columns(&preprocessed_trace.ids());
+        &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids());
     let scheduling_component = components::scheduling::air::Component::new(
         trace_allocator,
         components::scheduling::air::Eval {
@@ -86,28 +91,27 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
         claimed_sum.compression,
     );
 
-    info!("Scheduling component info:\n{}", scheduling_component);
-    prove(
+    let proof = prove(
         &[&scheduling_component, &compression_component],
         channel,
         commitment_scheme,
     )
-    .unwrap()
+    .unwrap();
+    span.exit();
+
+    proof
 }
 
 #[cfg(test)]
 mod tests {
+    use tracing::info;
+
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_prove_sha256() {
-        use std::time::Instant;
-
         let log_size = 18;
-        let start = Instant::now();
+        info!("Log size: {}", log_size);
         prove_sha256(log_size, PcsConfig::default());
-        let duration = start.elapsed();
-        println!("Time spent in prove_sha256: {:?}", duration);
-        println!("Log size: {}", log_size);
     }
 }

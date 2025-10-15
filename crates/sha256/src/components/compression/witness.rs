@@ -3,34 +3,42 @@
 //! This is, 64 iterations of the main loop, doing Sigma0, Sigma1 and adding the
 //! results with the buffer values.
 
-use crate::components::compression::columns::{
-    InteractionColumns, InteractionColumnsIndex, RoundColumns,
-};
-use crate::partitions::{pext_u32x16, BigSigma0, BigSigma1};
-use crate::relations::Relations;
-use crate::sha256::{
-    big_sigma1_u32x16, big_sigma_0_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
-};
-use crate::{combine, write_col};
+use std::simd::u32x16;
+
 use itertools::izip;
 use num_traits::One;
-use stwo_prover::constraint_framework::logup::LogupTraceGenerator;
-use stwo_prover::constraint_framework::Relation;
-use stwo_prover::core::backend::simd::column::BaseColumn;
-use stwo_prover::core::backend::simd::m31::{PackedM31, LOG_N_LANES};
-use stwo_prover::core::backend::simd::qm31::PackedQM31;
-use stwo_prover::core::backend::simd::SimdBackend;
-use stwo_prover::core::fields::m31::BaseField;
-use stwo_prover::core::fields::qm31::QM31;
-use stwo_prover::core::poly::circle::CanonicCoset;
-use stwo_prover::core::poly::circle::CircleEvaluation;
-use stwo_prover::core::poly::BitReversedOrder;
-use stwo_prover::core::ColumnVec;
-use tracing::span;
-use tracing::Level;
+use stwo::{
+    core::{
+        fields::{m31::BaseField, qm31::QM31},
+        poly::circle::CanonicCoset,
+        ColumnVec,
+    },
+    prover::{
+        backend::simd::{
+            column::BaseColumn,
+            m31::{PackedM31, LOG_N_LANES},
+            qm31::PackedQM31,
+            SimdBackend,
+        },
+        poly::{circle::CircleEvaluation, BitReversedOrder},
+    },
+};
+use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 
-use crate::components::{combine_w, W_SIZE};
-use std::simd::u32x16;
+use crate::{
+    combine,
+    components::{
+        combine_w,
+        compression::columns::{InteractionColumns, InteractionColumnsIndex, RoundColumns},
+        W_SIZE,
+    },
+    partitions::{pext_u32x16, BigSigma0, BigSigma1},
+    relations::Relations,
+    sha256::{
+        big_sigma1_u32x16, big_sigma_0_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
+    },
+    write_col,
+};
 
 const N_ROUNDS: usize = 64;
 
@@ -60,7 +68,6 @@ pub fn gen_trace(
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     Vec<Vec<u32x16>>,
 ) {
-    let _span = span!(Level::INFO, "Generation").entered();
     let simd_size = w[0].data.len();
 
     // Initialize vec for all groups of columns
@@ -565,7 +572,6 @@ pub fn gen_interaction_trace(
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     QM31,
 ) {
-    let _span = span!(Level::INFO, "Scheduling interaction trace").entered();
     let simd_size = lookup_data[0].len();
     let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
 
@@ -834,8 +840,10 @@ pub fn gen_interaction_trace(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::scheduling::witness::gen_trace as gen_schedule;
-    use crate::{sha256::process_chunk_u32x16, CHUNK_SIZE};
+    use crate::{
+        components::scheduling::witness::gen_trace as gen_schedule, sha256::process_chunk_u32x16,
+        CHUNK_SIZE,
+    };
 
     #[test]
     fn test_gen_trace_columns_count() {

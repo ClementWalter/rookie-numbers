@@ -4,8 +4,7 @@ pub mod relations;
 
 use components::{Claim, InteractionClaim};
 use serde::{Deserialize, Serialize};
-use stwo_prover::core::prover::StarkProof;
-use stwo_prover::core::vcs::ops::MerkleHasher;
+use stwo::core::{proof::StarkProof, vcs::MerkleHasher};
 
 #[derive(Serialize, Deserialize)]
 pub struct Proof<const N: usize, H: MerkleHasher> {

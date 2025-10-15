@@ -1,6 +1,4 @@
-use std::simd::cmp::SimdPartialEq;
-use std::simd::num::SimdUint;
-use std::simd::{simd_swizzle, u16x16, u16x32, u32x16, Simd};
+use std::simd::{cmp::SimdPartialEq, num::SimdUint, simd_swizzle, u16x16, u16x32, u32x16, Simd};
 
 /// This will be used to identify the function part in the relation.
 #[repr(u32)]
