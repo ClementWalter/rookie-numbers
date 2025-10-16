@@ -16,6 +16,7 @@ use crate::relations::{LookupData, Relations};
 pub const W_SIZE: usize = 128; // 128 u16 = 64 u32
 
 pub mod compression;
+pub mod preprocessed;
 pub mod scheduling;
 
 pub struct ClaimedSum {
@@ -110,6 +111,15 @@ macro_rules! round_columns {
             {
                 Self {
                     $($column: eval.next_trace_mask(),)*
+                }
+            }
+        }
+
+        impl<T> std::iter::FromIterator<T> for $name<T> {
+            fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+                let mut it = iter.into_iter();
+                Self {
+                    $($column: it.next().unwrap(),)*
                 }
             }
         }

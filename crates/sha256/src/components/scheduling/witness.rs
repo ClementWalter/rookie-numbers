@@ -1,37 +1,3 @@
-//! The scheduling component is responsible for proving the scheduling part of sha256.
-//!
-//! This is, 48 iterations of the main loop, doing sigma_0, sigma_1 and adding the
-//! results with some previous W values to the current W value.
-//! The W array is actually write-once in the sense that no value is updated.
-//! For the AIR, we just need to define an encoding for a row
-//! that would contained all the required data, and access the required values with
-//! deterministically computed indices.
-//!
-//! The AIR works as follows:
-//!
-//! - row[0: 128] = the resulting W array, decomposed in low and high parts
-//!
-//! For sigma_0, only indexes from 1..=48 are used. Each operation requires
-//! to hint the decomposition over I0 and the 3 output values, so 5 columns, or 5*48=240 columns.
-//!
-//! - row[128:(128 + 240)] = sigma_0 values
-//!
-//! For sigma_1, only indexes from 14..=61 are used. Each operation requires
-//! to hint the decomposition over I0 and the 3 output values, so 5 columns, or 5*48=240 columns.
-//!
-//! - row[(128 + 240):(128 + 2*240)] = sigma_1 values
-//!
-//! The final addition at each iteration requires to hint the 2 carries. There are 48 iterations,
-//! so 2*48=96 columns.
-//!
-//! - row[(128 + 2*240):(128 + 2*240 + 96)] = the carries
-//!
-//! In short, the main trace of the AIR is then defined as follows:
-//! - row[0: 128] = W
-//! - row[128:368] = sigma_0 values
-//! - row[368:608] = sigma_1 values
-//! - row[608:704] = the carries
-
 use std::simd::u32x16;
 
 use num_traits::One;

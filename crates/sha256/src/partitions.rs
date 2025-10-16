@@ -105,18 +105,44 @@ pub mod BigSigma1 {
 
 /// Generates all subsets of the given bitmask `mask`
 pub struct SubsetIterator {
-    current: u32,
-    mask: u32,
-    done: bool, // Track if we've yielded 0
+    bit_pos: [u8; 32],
+    k: u8,
+    idx_fwd: u32,   // forward index
+    idx_back: u32,  // backward index (exclusive upper bound)
 }
 
 impl SubsetIterator {
     pub const fn new(mask: u32) -> Self {
-        Self {
-            current: mask,
-            mask,
-            done: false,
+        let mut bit_pos = [0u8; 32];
+        let mut k = 0u8;
+        let mut m = mask;
+        let mut pos = 0u8;
+        while m != 0 {
+            if (m & 1) != 0 {
+                bit_pos[k as usize] = pos;
+                k += 1;
+            }
+            m >>= 1;
+            pos += 1;
         }
+        let total = 1u32 << k;
+        Self {
+            bit_pos,
+            k,
+            idx_fwd: 0,
+            idx_back: total,
+        }
+    }
+
+    #[inline]
+    fn scatter(&self, c: u32) -> u32 {
+        let mut out = 0;
+        for i in 0..self.k as usize {
+            if (c >> i) & 1 != 0 {
+                out |= 1u32 << self.bit_pos[i];
+            }
+        }
+        out
     }
 }
 
@@ -124,16 +150,22 @@ impl Iterator for SubsetIterator {
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.done {
+        if self.idx_fwd >= self.idx_back {
             return None;
         }
-        let current = self.current;
-        if current == 0 {
-            self.done = true; // Mark done after yielding 0
-        } else {
-            self.current = (current - 1) & self.mask;
+        let val = self.scatter(self.idx_fwd);
+        self.idx_fwd += 1;
+        Some(val)
+    }
+}
+
+impl DoubleEndedIterator for SubsetIterator {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.idx_fwd >= self.idx_back {
+            return None;
         }
-        Some(current)
+        self.idx_back -= 1;
+        Some(self.scatter(self.idx_back))
     }
 }
 
@@ -222,7 +254,20 @@ mod test {
     fn test_subset_iterator() {
         let mask = 0b101;
         let result = SubsetIterator::new(mask);
+        assert_eq!(result.collect::<Vec<_>>(), vec![0, 1, 4, 5]);
+    }
+    #[test]
+    fn test_subset_iterator_rev() {
+        let mask = 0b101;
+        let result = SubsetIterator::new(mask).rev();
         assert_eq!(result.collect::<Vec<_>>(), vec![5, 4, 1, 0]);
+    }
+
+    #[test]
+    fn test_subset_iterator_pext() {
+        let mask = 0b101;
+        let result = SubsetIterator::new(mask).map(|x| pext_u32(x, mask));
+        assert_eq!(result.collect::<Vec<_>>(), vec![0, 1, 2, 3]);
     }
 
     #[test]

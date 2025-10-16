@@ -185,7 +185,8 @@ mod tests {
 
     #[test]
     fn test_reference_implementation() {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
+
         use crate::sha256::{process_chunk, H};
 
         let input = b"hello world";

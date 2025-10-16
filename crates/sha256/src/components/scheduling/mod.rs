@@ -1,3 +1,3 @@
 pub mod air;
-mod columns;
+pub mod columns;
 pub mod witness;

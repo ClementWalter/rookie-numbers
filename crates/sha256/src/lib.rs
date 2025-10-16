@@ -104,16 +104,13 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
 
 #[cfg(test)]
 mod tests {
-    use std::env;
+    use std::{env, time::Instant};
 
+    use peak_alloc::PeakAlloc;
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
     use tracing::info;
 
     use super::*;
-
-    use peak_alloc::PeakAlloc;
-
-    use rayon::iter::{IntoParallelIterator, ParallelIterator};
-    use std::time::Instant;
 
     #[global_allocator]
     static PEAK_ALLOC: PeakAlloc = PeakAlloc;
@@ -149,7 +146,10 @@ mod tests {
             .map(|_| prove_sha256(log_size, PcsConfig::default()))
             .collect::<Vec<_>>();
         span.exit();
-        info!("Throughput {:?}", (1<<log_n_instances) as f32*n_iter as f32/start.elapsed().as_secs() as f32);
+        info!(
+            "Throughput {:?}",
+            (1 << log_n_instances) as f32 * n_iter as f32 / start.elapsed().as_secs() as f32
+        );
 
         let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
         info!("Peak memory: {} MB", peak_bytes);
