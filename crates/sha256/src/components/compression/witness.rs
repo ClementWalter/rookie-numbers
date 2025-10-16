@@ -37,7 +37,7 @@ use crate::{
     sha256::{
         big_sigma1_u32x16, big_sigma_0_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
     },
-    write_col,
+    write_pair,
 };
 
 const N_ROUNDS: usize = 64;
@@ -818,7 +818,7 @@ pub fn gen_interaction_trace(
             a_carry_high,
         ];
         for i in 0..(secure_columns.len() / 2) {
-            write_col!(
+            write_pair!(
                 secure_columns[2 * i],
                 secure_columns[2 * i + 1],
                 interaction_trace

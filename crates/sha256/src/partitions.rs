@@ -107,8 +107,8 @@ pub mod BigSigma1 {
 pub struct SubsetIterator {
     bit_pos: [u8; 32],
     k: u8,
-    idx_fwd: u32,   // forward index
-    idx_back: u32,  // backward index (exclusive upper bound)
+    idx_fwd: u32,  // forward index
+    idx_back: u32, // backward index (exclusive upper bound)
 }
 
 impl SubsetIterator {
@@ -256,11 +256,41 @@ mod test {
         let result = SubsetIterator::new(mask);
         assert_eq!(result.collect::<Vec<_>>(), vec![0, 1, 4, 5]);
     }
+
     #[test]
     fn test_subset_iterator_rev() {
         let mask = 0b101;
         let result = SubsetIterator::new(mask).rev();
         assert_eq!(result.collect::<Vec<_>>(), vec![5, 4, 1, 0]);
+    }
+
+    #[test]
+    fn test_subset_iterator_double() {
+        let mask = 0b101;
+        let result = SubsetIterator::new(mask)
+            .flat_map(move |x| SubsetIterator::new(mask).map(move |y| (x, y)))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            result,
+            vec![
+                (0, 0),
+                (0, 1),
+                (0, 4),
+                (0, 5),
+                (1, 0),
+                (1, 1),
+                (1, 4),
+                (1, 5),
+                (4, 0),
+                (4, 1),
+                (4, 4),
+                (4, 5),
+                (5, 0),
+                (5, 1),
+                (5, 4),
+                (5, 5),
+            ]
+        );
     }
 
     #[test]

@@ -90,13 +90,14 @@ pub fn gen_interaction_trace(
 }
 
 #[macro_export]
-macro_rules! round_columns {
-    ($name:ident,$($column:ident),*) => {
+macro_rules! trace_columns {
+    ($name:ident,$($column:ident),* $(,)?) => {
         #[derive(Debug)]
         pub struct $name<T> {
             $(pub $column: T),*
         }
 
+        #[allow(dead_code)]
         impl<T: Clone + Copy> $name<T> {
             pub fn to_vec(&self) -> Vec<T> {
                 vec![$(self.$column),*]
@@ -111,6 +112,19 @@ macro_rules! round_columns {
             {
                 Self {
                     $($column: eval.next_trace_mask(),)*
+                }
+            }
+        }
+
+        #[allow(dead_code)]
+        impl<T> $name<T> {
+            pub fn from_ids<E>(eval: &mut E) -> Self
+            where
+                E: stwo_constraint_framework::EvalAtRow<F = T>,
+            {
+                use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
+                Self {
+                    $($column: eval.get_preprocessed_column(PreProcessedColumnId { id: format!("{}", stringify!($column)) }),)*
                 }
             }
         }
@@ -137,23 +151,25 @@ macro_rules! round_columns {
 #[macro_export]
 macro_rules! combine {
     ($relations:expr, $data:expr, $base_index:expr, $($col:ident),+ $(,)?) => {{
-        let simd_size = $data[0].len();
+        let simd_sizes = [$(
+            $data[$base_index + InteractionColumnsIndex::$col as usize].len(),
+        )+];
+
+        let simd_size = *simd_sizes.iter().max().unwrap();
         let mut combined = Vec::with_capacity(simd_size);
         for vec_row in 0..simd_size {
-            unsafe {
-                let denom: stwo::prover::backend::simd::qm31::PackedQM31 =
-                    $relations.combine(
-                        [
-                            $(
-                                stwo::prover::backend::simd::m31::PackedM31::from_simd_unchecked(
-                                    $data[$base_index + InteractionColumnsIndex::$col as usize][vec_row],
-                                ),
-                            )+
-                        ]
-                        .as_slice(),
-                    );
-                combined.push(denom);
-            }
+            let simd_values = [
+                $(
+                    $data[$base_index + InteractionColumnsIndex::$col as usize][vec_row],
+                )+
+            ];
+            let packed_m31_values = unsafe {
+                simd_values.map(|value| stwo::prover::backend::simd::m31::PackedM31::from_simd_unchecked(value))
+            };
+
+            let denom: stwo::prover::backend::simd::qm31::PackedQM31 =
+                $relations.combine(&packed_m31_values);
+            combined.push(denom);
         }
         combined
     }};
@@ -190,7 +206,37 @@ pub fn combine_w(
 
 #[macro_export]
 macro_rules! write_col {
-    ($denom_0: expr, $denom_1: expr, $interaction_trace:expr) => {
+    // --- Case 1: only denoms, numerators are just 1 ---
+    ($denom: expr, $interaction_trace:expr) => {
+        use num_traits::One;
+        let simd_size = $denom.len();
+        let mut col = $interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let numerator = stwo::prover::backend::simd::qm31::PackedQM31::one();
+            let denom = $denom[vec_row];
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+    };
+
+    // --- Case 2: with explicit numerators ---
+    ($num: expr, $denom: expr, $interaction_trace:expr) => {
+        use num_traits::One;
+        let simd_size = $denom.len();
+        let mut col = $interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let numerator = stwo::prover::backend::simd::qm31::PackedQM31::one() * $num[vec_row];
+            let denom = $denom[vec_row];
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+    };
+}
+
+#[macro_export]
+macro_rules! write_pair {
+    // --- Case 1: only denoms, numerators are just 1 ---
+    ($denom_0:expr, $denom_1:expr, $interaction_trace:expr) => {{
         let simd_size = $denom_0.len();
         let mut col = $interaction_trace.new_col();
         for vec_row in 0..simd_size {
@@ -199,7 +245,24 @@ macro_rules! write_col {
             col.write_frac(vec_row, numerator, denom);
         }
         col.finalize_col();
-    };
+    }};
+
+    // --- Case 2: with explicit numerators ---
+    ($numerator_0:expr, $denom_0:expr, $numerator_1:expr, $denom_1:expr, $interaction_trace:expr) => {{
+        use num_traits::One;
+        let simd_size = $denom_0.len();
+        let mut col = $interaction_trace.new_col();
+        for vec_row in 0..simd_size {
+            let numerator_0 =
+                stwo::prover::backend::simd::qm31::PackedQM31::one() * $numerator_0[vec_row];
+            let numerator_1 =
+                stwo::prover::backend::simd::qm31::PackedQM31::one() * $numerator_1[vec_row];
+            let numerator = numerator_0 * $denom_1[vec_row] + numerator_1 * $denom_0[vec_row];
+            let denom = $denom_0[vec_row] * $denom_1[vec_row];
+            col.write_frac(vec_row, numerator, denom);
+        }
+        col.finalize_col();
+    }};
 }
 
 #[macro_export]
@@ -211,4 +274,16 @@ macro_rules! add_to_relation {
             &[$($col.clone()),*],
         ))
     }};
+}
+
+#[macro_export]
+macro_rules! column_vec {
+    ($($column:ident),*) => {
+        ColumnVec::from(vec![
+            $(CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
+                CanonicCoset::new($column.len().ilog2()).circle_domain(),
+                BaseColumn::from_iter($column.into_iter().map(BaseField::from_u32_unchecked)),
+            )),*
+        ])
+    };
 }

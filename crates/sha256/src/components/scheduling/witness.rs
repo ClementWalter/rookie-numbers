@@ -26,7 +26,7 @@ use crate::{
     partitions::{pext_u32x16, Sigma0, Sigma1},
     relations::Relations,
     sha256::{small_sigma1_u32x16, small_sigma_0_u32x16},
-    write_col, CHUNK_SIZE,
+    write_pair, CHUNK_SIZE,
 };
 
 const N_ROUNDS: usize = 48;
@@ -346,7 +346,7 @@ pub fn gen_interaction_trace(
             carry_high,
         ];
         for i in 0..(secure_columns.len() / 2) {
-            write_col!(
+            write_pair!(
                 secure_columns[2 * i],
                 secure_columns[2 * i + 1],
                 interaction_trace

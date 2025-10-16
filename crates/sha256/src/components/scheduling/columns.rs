@@ -1,6 +1,6 @@
-use crate::round_columns;
+use crate::trace_columns;
 
-round_columns!(
+trace_columns!(
     RoundColumns,
     w_15_i0_low,
     w_15_i0_high,
@@ -26,7 +26,7 @@ round_columns!(
     carry_high
 );
 
-round_columns!(
+trace_columns!(
     InteractionColumns,
     w_15_i0_low,
     w_15_i0_high,

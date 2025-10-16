@@ -12,6 +12,7 @@ use crate::{
     partitions::{pext_u32, Sigma0 as Sigma0Partitions, SubsetIterator},
     preprocessed::PreProcessedColumn,
     sha256::small_sigma_0,
+    trace_columns,
 };
 
 const N_IO_COLUMNS: usize = 5;
@@ -21,6 +22,24 @@ const N_O2_COLUMNS: usize = 4;
 relation!(I0, N_IO_COLUMNS);
 relation!(I1, N_I1_COLUMNS);
 relation!(O2, N_O2_COLUMNS);
+
+trace_columns!(
+    InteractionColumns,
+    sigma_0_i0_low,
+    sigma_0_i0_high,
+    sigma_0_o0_low,
+    sigma_0_o0_high,
+    sigma_0_o20_pext,
+    sigma_0_i1_low,
+    sigma_0_i1_high,
+    sigma_0_o1_low,
+    sigma_0_o1_high,
+    sigma_0_o21_pext,
+    sigma_0_o2_0,
+    sigma_0_o2_1,
+    sigma_0_o2_low,
+    sigma_0_o2_high
+);
 
 #[derive(Debug, Clone)]
 pub struct Relation {
@@ -65,21 +84,20 @@ impl PreProcessedColumn for Columns {
             Sigma0Partitions::I1.count_ones(),
             Sigma0Partitions::I1.count_ones(),
             // O2 lookup
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
-            Sigma0Partitions::O2.count_ones(),
+            Sigma0Partitions::O2.count_ones() * 2,
+            Sigma0Partitions::O2.count_ones() * 2,
+            Sigma0Partitions::O2.count_ones() * 2,
+            Sigma0Partitions::O2.count_ones() * 2,
         ]
     }
 
     fn id(&self) -> Vec<PreProcessedColumnId> {
         [
-            "I0_L", "I0_H", "O0_L", "O0_H", "O20", // IO lookup
-            "I1_L", "I1_H", "O1_L", "O1_H", "O21", // I1 lookup
-            "O2_0", "O2_1", "O2_L", "O2_H", // O2 lookup
+            "i0_low", "i0_high", "o0_low", "o0_high", "o20_pext", "i1_low", "i1_high", "o1_low",
+            "o1_high", "o21_pext", "o2_0", "o2_1", "o2_low", "o2_high",
         ]
         .map(|i| PreProcessedColumnId {
-            id: format!("Sigma0_{}", i),
+            id: format!("sigma_0_{}", i),
         })
         .to_vec()
     }
@@ -217,6 +235,7 @@ impl PreProcessedColumn for Columns {
 mod tests {
     use std::collections::HashMap;
 
+    use itertools::izip;
     use stwo::prover::backend::Column;
 
     use super::*;
@@ -229,46 +248,46 @@ mod tests {
             Columns.id(),
             vec![
                 PreProcessedColumnId {
-                    id: "Sigma0_I0_L".to_string(),
+                    id: "sigma_0_i0_low".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I0_H".to_string(),
+                    id: "sigma_0_i0_high".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O0_L".to_string(),
+                    id: "sigma_0_o0_low".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O0_H".to_string(),
+                    id: "sigma_0_o0_high".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O20".to_string(),
+                    id: "sigma_0_o20_pext".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I1_L".to_string(),
+                    id: "sigma_0_i1_low".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_I1_H".to_string(),
+                    id: "sigma_0_i1_high".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O1_L".to_string(),
+                    id: "sigma_0_o1_low".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O1_H".to_string(),
+                    id: "sigma_0_o1_high".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O21".to_string(),
+                    id: "sigma_0_o21_pext".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_0".to_string(),
+                    id: "sigma_0_o2_0".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_1".to_string(),
+                    id: "sigma_0_o2_1".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_L".to_string(),
+                    id: "sigma_0_o2_low".to_string()
                 },
                 PreProcessedColumnId {
-                    id: "Sigma0_O2_H".to_string(),
+                    id: "sigma_0_o2_high".to_string()
                 },
             ]
         );
@@ -277,63 +296,11 @@ mod tests {
     #[test]
     fn test_gen_column_simd() {
         let columns = Columns.gen_column_simd();
+        let log_sizes = Columns.log_size();
         assert_eq!(columns.len(), N_COLUMNS);
-        assert_eq!(
-            columns[0].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[1].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[2].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[3].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[4].values.len().ilog2(),
-            Sigma0Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[5].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[6].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[7].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[8].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[9].values.len().ilog2(),
-            Sigma0Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[10].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[11].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[12].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[13].values.len().ilog2(),
-            Sigma0Partitions::O2.count_ones() * 2
-        );
+        izip!(columns, log_sizes).for_each(|(column, log_size)| {
+            assert_eq!(column.values.len().ilog2(), log_size);
+        });
     }
 
     #[test]

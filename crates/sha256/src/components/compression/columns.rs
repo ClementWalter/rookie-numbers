@@ -1,6 +1,6 @@
-use crate::round_columns;
+use crate::trace_columns;
 
-round_columns!(
+trace_columns!(
     RoundColumns,
     e_i0_low,
     e_i0_high,
@@ -56,7 +56,7 @@ round_columns!(
     a_carry_high
 );
 
-round_columns!(
+trace_columns!(
     InteractionColumns,
     // BIG_SIGMA_1
     e_i0_low,
