@@ -156,10 +156,10 @@ where
     );
 
     // Proof of work.
-    channel.mix_u64(proof.interaction_pow);
     if !channel.verify_pow_nonce(relations::INTERACTION_POW_BITS, proof.interaction_pow) {
         return Err(VerificationError::Stwo(StwoVerificationError::ProofOfWork));
     }
+    channel.mix_u64(proof.interaction_pow);
 
     info!("interaction trace");
     let relations = Relations::draw(channel);

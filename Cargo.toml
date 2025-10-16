@@ -28,3 +28,7 @@ itertools = "0.13.0"
 paste = "1.0"
 test-log = { version = "0.2.18", features = ["trace"] }
 peak_alloc = { version = "0.2" }
+sha2 = "0.10.8"
+
+[profile.test]
+overflow-checks = false

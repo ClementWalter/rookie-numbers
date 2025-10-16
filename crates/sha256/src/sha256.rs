@@ -184,6 +184,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_reference_implementation() {
+        use sha2::{Sha256, Digest};
+        use crate::sha256::{process_chunk, H};
+
+        let input = b"hello world";
+
+        // Reference result using sha2 crate
+        let reference = Sha256::digest(input);
+
+        // Build padded "hello world" message (11 bytes)
+        let mut msg = Vec::from(input);
+        msg.push(0x80);
+        while (msg.len() + 8) % 64 != 0 {
+            msg.push(0x00);
+        }
+        let bit_len: u64 = input.len() as u64 * 8;
+        msg.extend_from_slice(&bit_len.to_be_bytes());
+        assert_eq!(msg.len(), 64);
+
+        // Convert bytes to [u32; 16]
+        let mut chunk = [0u32; 16];
+        for (i, word) in chunk.iter_mut().enumerate() {
+            let bytes: [u8; 4] = msg[4 * i..4 * i + 4].try_into().unwrap();
+            *word = u32::from_be_bytes(bytes);
+        }
+
+        // Process single chunk
+        let hash = process_chunk(chunk, H);
+
+        // Convert [u32; 8] hash state to [u8; 32]
+        let mut result = [0u8; 32];
+        for (i, word) in hash.iter().enumerate() {
+            result[4 * i..4 * i + 4].copy_from_slice(&word.to_be_bytes());
+        }
+
+        assert_eq!(reference[..], result[..]);
+    }
+
+    #[test]
     fn test_rotr_u32x16() {
         let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
