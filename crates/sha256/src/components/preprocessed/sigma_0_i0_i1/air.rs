@@ -1,18 +1,18 @@
-use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval};
+use stwo_constraint_framework::{EvalAtRow, FrameworkEval};
 
 use crate::{
-    add_to_relation, components::preprocessed::sigma_0_i0_i1::columns::ComponentColumns,
-    preprocessed::sigma_0::InteractionColumns as Sigma0Columns, relations::Relations,
+    add_to_relation, components::preprocessed::sigma_0_i0_i1::columns::ComponentColumnsOwned,
+    preprocessed::sigma_0::ColumnsOwned as Sigma0ColumnsOwned, relations::Relations,
 };
 
-pub type Component = FrameworkComponent<Eval>;
+// pub type Component = FrameworkComponent<Eval>;
 
 fn eval_sigma_0_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations) {
-    let ComponentColumns {
+    let ComponentColumnsOwned {
         sigma_0_i0_mult,
         sigma_0_i1_mult,
-    } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
-    let Sigma0Columns {
+    } = ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
+    let Sigma0ColumnsOwned {
         sigma_0_i0_low,
         sigma_0_i0_high,
         sigma_0_o0_low,
@@ -27,7 +27,7 @@ fn eval_sigma_0_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations) {
         sigma_0_o2_1: _,
         sigma_0_o2_low: _,
         sigma_0_o2_high: _,
-    } = Sigma0Columns::<<E as EvalAtRow>::F>::from_ids(eval);
+    } = Sigma0ColumnsOwned::<<E as EvalAtRow>::F>::from_ids(eval);
 
     add_to_relation!(
         eval,
@@ -85,7 +85,7 @@ mod tests {
             preprocessed::sigma_0_i0_i1::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::{sigma_0::Columns, PreProcessedColumn},
+        preprocessed::sigma_0,
     };
 
     #[cfg_attr(not(feature = "slow-tests"), ignore)]
@@ -94,13 +94,13 @@ mod tests {
         const LOG_N_ROWS: u32 = 8;
 
         // Trace.
-        let mut preprocessed_trace = Columns.gen_column_simd()[0..10].to_vec();
+        let mut preprocessed_trace = sigma_0::gen_column_simd()[0..10].to_vec();
 
         // from_ids requires enough columns, we just extend to match the number of columns required by the relations
-        preprocessed_trace.extend_from_slice(&Columns.gen_column_simd()[0..4]);
+        preprocessed_trace.extend_from_slice(&sigma_0::gen_column_simd()[0..4]);
 
-        let (scheduling_trace, _) = gen_scheduling_trace(LOG_N_ROWS);
-        let trace = gen_trace(&scheduling_trace);
+        let (_, lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
+        let trace = gen_trace(&lookup_data);
 
         let relations = Relations::dummy();
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);

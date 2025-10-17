@@ -18,6 +18,10 @@ pub const H: [u32; 8] = [
     1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225,
 ];
 
+pub const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
+pub const N_SCHEDULING_ROUNDS: usize = 48; // 16..48
+pub const N_COMPRESSION_ROUNDS: usize = 64;
+
 #[inline(always)]
 fn rotr_u32x16(x: u32x16, n: u32) -> u32x16 {
     let n = Simd::splat(n);
@@ -120,7 +124,7 @@ pub const fn big_sigma_0(x: u32) -> u32 {
     x.rotate_right(2) ^ x.rotate_right(13) ^ x.rotate_right(22)
 }
 
-pub const fn big_sigma1(x: u32) -> u32 {
+pub const fn big_sigma_1(x: u32) -> u32 {
     x.rotate_right(6) ^ x.rotate_right(11) ^ x.rotate_right(25)
 }
 
@@ -155,7 +159,7 @@ pub fn process_chunk(chunk: [u32; 16], mut hash: [u32; 8]) -> [u32; 8] {
     let mut g = hash[6];
     let mut h = hash[7];
     for round in 0..64 {
-        let temp1 = h + big_sigma1(e) + ch_left(e, f) + ch_right(e, g) + w[round] + K[round];
+        let temp1 = h + big_sigma_1(e) + ch_left(e, f) + ch_right(e, g) + w[round] + K[round];
         let temp2 = big_sigma_0(a) + maj(a, b, c);
         h = g;
         g = f;
@@ -264,7 +268,7 @@ mod tests {
     fn test_big_sigma1_u32x16() {
         let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         assert_eq!(
-            base.map(big_sigma1),
+            base.map(big_sigma_1),
             big_sigma1_u32x16(u32x16::from_array(base)).to_array()
         );
     }

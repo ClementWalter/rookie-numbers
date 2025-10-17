@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-#![feature(portable_simd)]
+#![feature(portable_simd, array_chunks)]
 pub mod components;
 pub mod partitions;
 pub mod preprocessed;
@@ -25,8 +25,6 @@ use crate::{
     relations::Relations,
 };
 
-const CHUNK_SIZE: usize = 32; // 16 u32 = 32 u16
-
 pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkleHasher> {
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
@@ -43,10 +41,9 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
         CommitmentSchemeProver::<_, Blake2sMerkleChannel>::new(config, &twiddles);
 
     // Preprocessed trace.
-    let preprocessed_trace = PreProcessedTrace::default();
     let span = span!(Level::INFO, "Constant").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_evals(preprocessed_trace.gen_trace());
+    tree_builder.extend_evals(PreProcessedTrace.gen_trace());
     tree_builder.commit(channel);
     span.exit();
 
@@ -72,7 +69,7 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     // Prove constraints.
     let span = span!(Level::INFO, "Prove").entered();
     let trace_allocator =
-        &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids());
+        &mut TraceLocationAllocator::new_with_preprocessed_columns(&PreProcessedTrace.ids());
     let scheduling_component = components::scheduling::air::Component::new(
         trace_allocator,
         components::scheduling::air::Eval {

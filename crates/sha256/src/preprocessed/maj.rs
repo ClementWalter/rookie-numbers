@@ -6,12 +6,12 @@ use stwo::{
         poly::{circle::CircleEvaluation, BitReversedOrder},
     },
 };
-use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
+use stwo_constraint_framework::relation;
 
 use crate::{
     partitions::{BigSigma0 as BigSigma0Partitions, SubsetIterator},
-    preprocessed::PreProcessedColumn,
     sha256::maj,
+    trace_columns,
 };
 
 // [a, b, c, val]
@@ -23,6 +23,34 @@ relation!(I0_H1, N_COLUMNS);
 relation!(I1_L0, N_COLUMNS);
 relation!(I1_L1, N_COLUMNS);
 relation!(I1_H, N_COLUMNS);
+
+trace_columns!(
+    Columns,
+    maj_i0_low_a,
+    maj_i0_low_b,
+    maj_i0_low_c,
+    maj_i0_low_res,
+    maj_i0_high_0_a,
+    maj_i0_high_0_b,
+    maj_i0_high_0_c,
+    maj_i0_high_0_res,
+    maj_i0_high_1_a,
+    maj_i0_high_1_b,
+    maj_i0_high_1_c,
+    maj_i0_high_1_res,
+    maj_i1_low_0_a,
+    maj_i1_low_0_b,
+    maj_i1_low_0_c,
+    maj_i1_low_0_res,
+    maj_i1_low_1_a,
+    maj_i1_low_1_b,
+    maj_i1_low_1_c,
+    maj_i1_low_1_res,
+    maj_i1_high_a,
+    maj_i1_high_b,
+    maj_i1_high_c,
+    maj_i1_high_res,
+);
 
 #[derive(Debug, Clone)]
 pub struct Relation {
@@ -58,129 +86,56 @@ impl Relation {
     }
 }
 
-pub struct Columns;
+pub fn gen_column_simd() -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
+    let mut all_columns = Vec::with_capacity(6 * N_COLUMNS);
 
-impl PreProcessedColumn for Columns {
-    fn log_size(&self) -> Vec<u32> {
-        vec![
-            // I0_L lookup
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            // I0_H0 lookup
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            // I0_H1 lookup
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            // I1_L0 lookup
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            // I1_L1 lookup
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            // I1_H lookup
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-        ]
+    for partition in [
+        BigSigma0Partitions::I0_L,
+        BigSigma0Partitions::I0_H0,
+        BigSigma0Partitions::I0_H1,
+        BigSigma0Partitions::I1_L0,
+        BigSigma0Partitions::I1_L1,
+        BigSigma0Partitions::I1_H,
+    ] {
+        let domain = CanonicCoset::new(partition.count_ones() * 3).circle_domain();
+        let columns = SubsetIterator::new(partition)
+            .flat_map(move |x| SubsetIterator::new(partition).map(move |y| (x, y)))
+            .flat_map(move |x| {
+                SubsetIterator::new(partition).map(move |y| {
+                    (
+                        BaseField::from_u32_unchecked(x.0),
+                        BaseField::from_u32_unchecked(x.1),
+                        BaseField::from_u32_unchecked(y),
+                        BaseField::from_u32_unchecked(maj(x.0, x.1, y)),
+                    )
+                })
+            });
+
+        let (a, rest) = columns.tee();
+        let (b, rest) = rest.tee();
+        let (c, res) = rest.tee();
+
+        all_columns.extend(vec![
+            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
+                domain,
+                BaseColumn::from_iter(a.map(|t| t.0)),
+            ),
+            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
+                domain,
+                BaseColumn::from_iter(b.map(|t| t.1)),
+            ),
+            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
+                domain,
+                BaseColumn::from_iter(c.map(|t| t.2)),
+            ),
+            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
+                domain,
+                BaseColumn::from_iter(res.map(|t| t.3)),
+            ),
+        ]);
     }
 
-    fn id(&self) -> Vec<PreProcessedColumnId> {
-        [
-            "I0_L_A",
-            "I0_L_B",
-            "I0_L_C",
-            "I0_L_RES",
-            "I0_H0_A",
-            "I0_H0_B",
-            "I0_H0_C",
-            "I0_H0_RES",
-            "I0_H1_A",
-            "I0_H1_B",
-            "I0_H1_C",
-            "I0_H1_RES",
-            "I1_L0_A",
-            "I1_L0_B",
-            "I1_L0_C",
-            "I1_L0_RES",
-            "I1_L1_A",
-            "I1_L1_B",
-            "I1_L1_C",
-            "I1_L1_RES",
-            "I1_H_A",
-            "I1_H_B",
-            "I1_H_C",
-            "I1_H_RES",
-        ]
-        .map(|i| PreProcessedColumnId {
-            id: format!("Maj_{}", i),
-        })
-        .to_vec()
-    }
-
-    fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        let mut all_columns = Vec::with_capacity(26);
-
-        for partition in [
-            BigSigma0Partitions::I0_L,
-            BigSigma0Partitions::I0_H0,
-            BigSigma0Partitions::I0_H1,
-            BigSigma0Partitions::I1_L0,
-            BigSigma0Partitions::I1_L1,
-            BigSigma0Partitions::I1_H,
-        ] {
-            // I0 lookup
-            let domain = CanonicCoset::new(partition.count_ones() * 3).circle_domain();
-            let columns = SubsetIterator::new(partition)
-                .flat_map(move |x| SubsetIterator::new(partition).map(move |y| (x, y)))
-                .flat_map(move |x| {
-                    SubsetIterator::new(partition).map(move |y| {
-                        (
-                            BaseField::from_u32_unchecked(x.0),
-                            BaseField::from_u32_unchecked(x.1),
-                            BaseField::from_u32_unchecked(y),
-                            BaseField::from_u32_unchecked(maj(x.0, x.1, y)),
-                        )
-                    })
-                });
-
-            let (a, rest) = columns.tee();
-            let (b, rest) = rest.tee();
-            let (c, res) = rest.tee();
-
-            all_columns.extend(vec![
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(a.map(|t| t.0)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(b.map(|t| t.1)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(c.map(|t| t.2)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(res.map(|t| t.3)),
-                ),
-            ]);
-        }
-
-        all_columns
-    }
+    all_columns
 }
 
 #[cfg(test)]
@@ -193,91 +148,13 @@ mod tests {
 
     #[test]
     fn test_ids() {
-        assert_eq!(Columns.id().len(), N_COLUMNS * 6);
-
-        assert_eq!(
-            Columns.id(),
-            vec![
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_RES".to_string(),
-                },
-            ]
-        );
+        assert_eq!(Columns::to_ids().len(), N_COLUMNS * 6);
     }
 
     #[allow(clippy::cognitive_complexity)]
     #[test]
     fn test_gen_column_simd() {
-        let columns = Columns.gen_column_simd();
+        let columns = gen_column_simd();
         assert_eq!(columns.len(), N_COLUMNS * 6);
         assert_eq!(
             columns[0].values.len().ilog2(),
@@ -379,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_random_input() {
-        let columns = Columns.gen_column_simd();
+        let columns = gen_column_simd();
 
         let mut lookup_i0_l: HashMap<(u32, u32, u32), u32> = HashMap::new();
         columns[0]
