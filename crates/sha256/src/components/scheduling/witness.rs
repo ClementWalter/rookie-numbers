@@ -27,7 +27,7 @@ use crate::{
     consume_pair, emit_col,
     partitions::{pext_u32x16, Sigma0, Sigma1},
     relations::Relations,
-    sha256::{small_sigma1_u32x16, small_sigma_0_u32x16, CHUNK_SIZE, N_SCHEDULING_ROUNDS},
+    sha256::{small_sigma_0_u32x16, small_sigma_1_u32x16, CHUNK_SIZE, N_SCHEDULING_ROUNDS},
 };
 
 const N_COLUMNS: usize = W_SIZE + RoundColumns::SIZE * N_SCHEDULING_ROUNDS;
@@ -35,7 +35,7 @@ const N_INTERACTION_COLUMNS: usize = W_SIZE + RoundInteractionColumns::SIZE * N_
 
 #[inline]
 fn generate_simd_sequence_bulk(start: usize, len: usize) -> Vec<u32x16> {
-    assert!(len % 16 == 0);
+    assert!(len.is_multiple_of(16));
     let n = len / 16;
     let base = start as u32;
 
@@ -128,7 +128,7 @@ pub fn gen_trace(
             // Decomposition over I0
             let w_2_i0_low = w_2_low & u32x16::splat(Sigma1::I0_L);
             let w_2_i0_high = w_2_high & u32x16::splat(Sigma1::I0_H);
-            let sigma_1 = small_sigma1_u32x16(w_2_i0_low + (w_2_i0_high << 16));
+            let sigma_1 = small_sigma_1_u32x16(w_2_i0_low + (w_2_i0_high << 16));
             let sigma_1_o0_low = sigma_1 & u32x16::splat(Sigma1::O0_L);
             let sigma_1_o0_high = (sigma_1 >> 16) & u32x16::splat(Sigma1::O0_H);
             let sigma_1_o20 = sigma_1 & u32x16::splat(Sigma1::O2);
@@ -137,7 +137,7 @@ pub fn gen_trace(
             // Decomposition over I1
             let w_2_i1_low = w_2_low & u32x16::splat(Sigma1::I1_L);
             let w_2_i1_high = w_2_high & u32x16::splat(Sigma1::I1_H);
-            let sigma_1 = small_sigma1_u32x16(w_2_i1_low + (w_2_i1_high << 16));
+            let sigma_1 = small_sigma_1_u32x16(w_2_i1_low + (w_2_i1_high << 16));
             let sigma_1_o1_low = sigma_1 & u32x16::splat(Sigma1::O1_L);
             let sigma_1_o1_high = (sigma_1 >> 16) & u32x16::splat(Sigma1::O1_H);
             let sigma_1_o21 = sigma_1 & u32x16::splat(Sigma1::O2);
@@ -342,17 +342,14 @@ pub fn gen_interaction_trace(
         let carry_low = combine!(relations.range_check_add.add_4, new_w_low, carry_low,);
         let carry_high = combine!(relations.range_check_add.add_4, new_w_high, carry_high);
 
-        let secure_columns = [
-            sigma_0_i0, sigma_0_i1, sigma_0_o2, sigma_1_i0, sigma_1_i1, sigma_1_o2, carry_low,
+        consume_pair!(
+            interaction_trace;
+            sigma_0_i0, sigma_0_i1,
+
+
+            sigma_0_o2, sigma_1_i0, sigma_1_i1, sigma_1_o2, carry_low,
             carry_high,
-        ];
-        for i in 0..(secure_columns.len() / 2) {
-            consume_pair!(
-                secure_columns[2 * i],
-                secure_columns[2 * i + 1],
-                interaction_trace
-            );
-        }
+        );
     }
 
     // Emit W consumed by compression
@@ -366,7 +363,7 @@ mod tests {
     use stwo::prover::backend::Column;
 
     use super::*;
-    use crate::sha256::{small_sigma1, small_sigma_0};
+    use crate::sha256::{small_sigma_0, small_sigma_1};
 
     #[test]
     fn test_generate_simd_sequence_bulk() {
@@ -420,7 +417,7 @@ mod tests {
                     w_current,
                     w_16.overflowing_add(small_sigma_0(w_15))
                         .0
-                        .overflowing_add(w_7.overflowing_add(small_sigma1(w_2)).0)
+                        .overflowing_add(w_7.overflowing_add(small_sigma_1(w_2)).0)
                         .0
                 );
             }

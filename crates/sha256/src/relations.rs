@@ -1,18 +1,3 @@
-//! Relations for the SHA-256 AIR.
-//! To alleviate the amount of relation, we use one single relation for each function and keep
-//! one slot on the relation for the function part identifier, e.g.
-//!
-//! Sigma0(O1, ...values)
-//! Sigma0(O2, ...values)
-//! Sigma0(O3, ...values)
-
-//! instead of managing 3 independent relations
-//! Sigma0_O1(...values)
-//! Sigma0_O2(...values)
-//! Sigma0_O3(...values)
-
-use std::simd::u32x16;
-
 use stwo::core::channel::Channel;
 
 use crate::preprocessed::{
@@ -67,9 +52,4 @@ impl Relations {
             w: w::Relation::dummy(),
         }
     }
-}
-
-pub struct LookupData {
-    pub scheduling: Vec<Vec<u32x16>>,
-    pub compression: Vec<Vec<u32x16>>,
 }

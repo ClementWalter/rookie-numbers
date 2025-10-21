@@ -1,14 +1,17 @@
 #![allow(non_camel_case_types)]
-#![feature(portable_simd, array_chunks)]
+#![feature(portable_simd, array_chunks, iter_array_chunks)]
 pub mod components;
+pub mod macros;
 pub mod partitions;
 pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
+use num_traits::Zero;
 use stwo::{
     core::{
         channel::Blake2sChannel,
+        fields::qm31::SecureField,
         pcs::PcsConfig,
         poly::circle::CanonicCoset,
         proof::StarkProof,
@@ -17,7 +20,7 @@ use stwo::{
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
 };
 use stwo_constraint_framework::TraceLocationAllocator;
-use tracing::{span, Level};
+use tracing::{info, span, Level};
 
 use crate::{
     components::{gen_interaction_trace, gen_trace},
@@ -29,7 +32,7 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     let twiddles = SimdBackend::precompute_twiddles(
-        CanonicCoset::new(21 + 1 + config.fri_config.log_blowup_factor)
+        CanonicCoset::new(21 + config.fri_config.log_blowup_factor + 2)
             .circle_domain()
             .half_coset,
     );
@@ -42,17 +45,24 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
 
     // Preprocessed trace.
     let span = span!(Level::INFO, "Constant").entered();
+    let span_1 = span!(Level::INFO, "Simd generation").entered();
+    let trace = PreProcessedTrace.gen_trace();
+    span_1.exit();
+    let span_2 = span!(Level::INFO, "Extend evals").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_evals(PreProcessedTrace.gen_trace());
+    tree_builder.extend_evals(trace);
     tree_builder.commit(channel);
+    span_2.exit();
     span.exit();
 
     // Trace.
     let span = span!(Level::INFO, "Trace").entered();
     let (trace, lookup_data) = gen_trace(log_size);
+    let span_1 = span!(Level::INFO, "Extend evals").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(trace);
     tree_builder.commit(channel);
+    span_1.exit();
     span.exit();
 
     // Draw lookup elements.
@@ -61,42 +71,35 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     // Interaction trace.
     let span = span!(Level::INFO, "Interaction").entered();
     let (trace, claimed_sum) = gen_interaction_trace(lookup_data, &relations);
+    let span_1 = span!(Level::INFO, "Extend evals").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(trace);
     tree_builder.commit(channel);
+    span_1.exit();
     span.exit();
 
     // Prove constraints.
     let span = span!(Level::INFO, "Prove").entered();
     let trace_allocator =
         &mut TraceLocationAllocator::new_with_preprocessed_columns(&PreProcessedTrace.ids());
-    let scheduling_component = components::scheduling::air::Component::new(
-        trace_allocator,
-        components::scheduling::air::Eval {
-            log_size,
-            relations: relations.clone(),
-        },
-        claimed_sum.scheduling,
-    );
+    let components =
+        components::Components::new(log_size, trace_allocator, &relations, &claimed_sum);
 
-    let compression_component = components::compression::air::Component::new(
-        trace_allocator,
-        components::compression::air::Eval {
-            log_size,
-            relations,
-        },
-        claimed_sum.compression,
-    );
+    if claimed_sum.scheduling + claimed_sum.compression + claimed_sum.preprocessed.sum()
+        != SecureField::zero()
+    {
+        let relation_summary = components.track_relations(&commitment_scheme);
+        info!("Relation summary: {:?}", relation_summary);
+        panic!("Relation summary is not zero");
+    }
 
-    let proof = prove(
-        &[&scheduling_component, &compression_component],
-        channel,
-        commitment_scheme,
-    )
-    .unwrap();
+    let proof = prove(&components.provers(), channel, commitment_scheme);
+    if let Err(e) = proof {
+        panic!("Proof error: {e:?}");
+    }
     span.exit();
 
-    proof
+    proof.unwrap()
 }
 
 #[cfg(test)]
@@ -112,7 +115,6 @@ mod tests {
     #[global_allocator]
     static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
-    #[cfg_attr(not(feature = "slow-tests"), ignore)]
     #[test_log::test]
     fn test_prove_sha256() {
         #[cfg(feature = "parallel")]
@@ -122,11 +124,11 @@ mod tests {
 
         // Get from environment variable:
         let log_n_instances = env::var("LOG_N_INSTANCES")
-            .unwrap_or_else(|_| "15".to_string())
+            .unwrap_or_else(|_| "4".to_string())
             .parse::<u32>()
             .unwrap();
         let n_iter = env::var("N_ITER")
-            .unwrap_or_else(|_| "8".to_string())
+            .unwrap_or_else(|_| "1".to_string())
             .parse::<u32>()
             .unwrap();
         let log_size = log_n_instances;

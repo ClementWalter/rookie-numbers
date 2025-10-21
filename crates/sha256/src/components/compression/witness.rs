@@ -34,7 +34,7 @@ use crate::{
     partitions::{pext_u32x16, BigSigma0, BigSigma1},
     relations::Relations,
     sha256::{
-        big_sigma1_u32x16, big_sigma_0_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
+        big_sigma_0_u32x16, big_sigma_1_u32x16, ch_left_u32x16, ch_right_u32x16, maj_u32x16, H, K,
         N_COMPRESSION_ROUNDS,
     },
 };
@@ -140,7 +140,7 @@ pub fn gen_trace(
             // Decomposition over I0
             let e_i0_low = e_low[simd_row] & u32x16::splat(BigSigma1::I0_L);
             let e_i0_high = e_high[simd_row] & u32x16::splat(BigSigma1::I0_H);
-            let sigma_1 = big_sigma1_u32x16(e_i0_low + (e_i0_high << 16));
+            let sigma_1 = big_sigma_1_u32x16(e_i0_low + (e_i0_high << 16));
             let sigma_1_o0_low = sigma_1 & u32x16::splat(BigSigma1::O0_L);
             let sigma_1_o0_high = (sigma_1 >> 16) & u32x16::splat(BigSigma1::O0_H);
             let sigma_1_o20 = sigma_1 & u32x16::splat(BigSigma1::O2);
@@ -149,7 +149,7 @@ pub fn gen_trace(
             // Decomposition over I1
             let e_i1_low = e_low[simd_row] & u32x16::splat(BigSigma1::I1_L);
             let e_i1_high = e_high[simd_row] & u32x16::splat(BigSigma1::I1_H);
-            let sigma_1 = big_sigma1_u32x16(e_i1_low + (e_i1_high << 16));
+            let sigma_1 = big_sigma_1_u32x16(e_i1_low + (e_i1_high << 16));
             let sigma_1_o1_low = sigma_1 & u32x16::splat(BigSigma1::O1_L);
             let sigma_1_o1_high = (sigma_1 >> 16) & u32x16::splat(BigSigma1::O1_H);
             let sigma_1_o21 = sigma_1 & u32x16::splat(BigSigma1::O2);
@@ -787,7 +787,8 @@ pub fn gen_interaction_trace(
         let a_carry_low = combine!(relations.range_check_add.add_8, new_a_low, a_carry_low,);
         let a_carry_high = combine!(relations.range_check_add.add_8, new_a_high, a_carry_high,);
 
-        let secure_columns = [
+        consume_pair!(
+            interaction_trace;
             big_sigma_1_i0,
             big_sigma_1_i1,
             big_sigma_1_o2,
@@ -812,14 +813,7 @@ pub fn gen_interaction_trace(
             e_carry_high,
             a_carry_low,
             a_carry_high,
-        ];
-        for i in 0..(secure_columns.len() / 2) {
-            consume_pair!(
-                secure_columns[2 * i],
-                secure_columns[2 * i + 1],
-                interaction_trace
-            );
-        }
+        );
     }
 
     // Consume W emitted by scheduling

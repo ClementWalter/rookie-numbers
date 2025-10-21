@@ -35,7 +35,7 @@ pub fn small_sigma_0_u32x16(x: u32x16) -> u32x16 {
 }
 
 #[inline(always)]
-pub fn small_sigma1_u32x16(x: u32x16) -> u32x16 {
+pub fn small_sigma_1_u32x16(x: u32x16) -> u32x16 {
     rotr_u32x16(x, 17) ^ rotr_u32x16(x, 19) ^ (x >> Simd::splat(10))
 }
 
@@ -45,7 +45,7 @@ pub fn big_sigma_0_u32x16(x: u32x16) -> u32x16 {
 }
 
 #[inline(always)]
-pub fn big_sigma1_u32x16(x: u32x16) -> u32x16 {
+pub fn big_sigma_1_u32x16(x: u32x16) -> u32x16 {
     rotr_u32x16(x, 6) ^ rotr_u32x16(x, 11) ^ rotr_u32x16(x, 25)
 }
 
@@ -72,7 +72,7 @@ pub fn process_chunk_u32x16(chunk: [u32x16; 16], mut hash: [u32x16; 8]) -> [u32x
     // Schedule
     for t in 16..64 {
         w[t] =
-            w[t - 16] + small_sigma_0_u32x16(w[t - 15]) + w[t - 7] + small_sigma1_u32x16(w[t - 2])
+            w[t - 16] + small_sigma_0_u32x16(w[t - 15]) + w[t - 7] + small_sigma_1_u32x16(w[t - 2])
     }
 
     // Compression
@@ -86,7 +86,7 @@ pub fn process_chunk_u32x16(chunk: [u32x16; 16], mut hash: [u32x16; 8]) -> [u32x
     let mut h = hash[7];
     for round in 0..64 {
         let temp1 = h
-            + big_sigma1_u32x16(e)
+            + big_sigma_1_u32x16(e)
             + ch_left_u32x16(e, f)
             + ch_right_u32x16(e, g)
             + u32x16::splat(K[round])
@@ -116,7 +116,7 @@ pub const fn small_sigma_0(x: u32) -> u32 {
     x.rotate_right(7) ^ x.rotate_right(18) ^ (x >> 3)
 }
 
-pub const fn small_sigma1(x: u32) -> u32 {
+pub const fn small_sigma_1(x: u32) -> u32 {
     x.rotate_right(17) ^ x.rotate_right(19) ^ (x >> 10)
 }
 
@@ -146,7 +146,7 @@ pub fn process_chunk(chunk: [u32; 16], mut hash: [u32; 8]) -> [u32; 8] {
 
     // Schedule
     for t in 16..64 {
-        w[t] = w[t - 16] + small_sigma_0(w[t - 15]) + w[t - 7] + small_sigma1(w[t - 2])
+        w[t] = w[t - 16] + small_sigma_0(w[t - 15]) + w[t - 7] + small_sigma_1(w[t - 2])
     }
 
     // Compression
@@ -201,7 +201,7 @@ mod tests {
         // Build padded "hello world" message (11 bytes)
         let mut msg = Vec::from(input);
         msg.push(0x80);
-        while (msg.len() + 8) % 64 != 0 {
+        while !(msg.len() + 8).is_multiple_of(64) {
             msg.push(0x00);
         }
         let bit_len: u64 = input.len() as u64 * 8;
@@ -247,11 +247,11 @@ mod tests {
     }
 
     #[test]
-    fn test_small_sigma1_u32x16() {
+    fn test_small_sigma_1_u32x16() {
         let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         assert_eq!(
-            base.map(small_sigma1),
-            small_sigma1_u32x16(u32x16::from_array(base)).to_array()
+            base.map(small_sigma_1),
+            small_sigma_1_u32x16(u32x16::from_array(base)).to_array()
         );
     }
 
@@ -265,11 +265,11 @@ mod tests {
     }
 
     #[test]
-    fn test_big_sigma1_u32x16() {
+    fn test_big_sigma_1_u32x16() {
         let base: [u32; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         assert_eq!(
             base.map(big_sigma_1),
-            big_sigma1_u32x16(u32x16::from_array(base)).to_array()
+            big_sigma_1_u32x16(u32x16::from_array(base)).to_array()
         );
     }
 
