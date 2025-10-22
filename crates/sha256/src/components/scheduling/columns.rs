@@ -27,7 +27,7 @@ trace_columns!(
 );
 
 trace_columns!(
-    InteractionColumns,
+    RoundInteractionColumns,
     w_15_i0_low,
     w_15_i0_high,
     sigma_0_o0_low,

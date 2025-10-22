@@ -57,7 +57,7 @@ trace_columns!(
 );
 
 trace_columns!(
-    InteractionColumns,
+    RoundInteractionColumns,
     // BIG_SIGMA_1
     e_i0_low,
     e_i0_high,

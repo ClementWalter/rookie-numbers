@@ -1,464 +1,251 @@
-use itertools::Itertools;
-use stwo::{
-    core::{channel::Channel, fields::m31::BaseField, poly::circle::CanonicCoset},
-    prover::{
-        backend::simd::{column::BaseColumn, SimdBackend},
-        poly::{circle::CircleEvaluation, BitReversedOrder},
-    },
-};
-use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
+use std::simd::u32x16;
+
+use itertools::{iproduct, Itertools};
+use stwo::core::channel::Channel;
+use stwo_constraint_framework::relation;
 
 use crate::{
     partitions::{BigSigma0 as BigSigma0Partitions, SubsetIterator},
-    preprocessed::PreProcessedColumn,
-    sha256::maj,
+    sha256::maj_u32x16,
+    trace_columns,
 };
 
 // [a, b, c, val]
 const N_COLUMNS: usize = 4;
 
-relation!(I0_L, N_COLUMNS);
-relation!(I0_H0, N_COLUMNS);
-relation!(I0_H1, N_COLUMNS);
-relation!(I1_L0, N_COLUMNS);
-relation!(I1_L1, N_COLUMNS);
-relation!(I1_H, N_COLUMNS);
+relation!(MAJ_I0_L, N_COLUMNS);
+relation!(MAJ_I0_H0, N_COLUMNS);
+relation!(MAJ_I0_H1, N_COLUMNS);
+relation!(MAJ_I1_L0, N_COLUMNS);
+relation!(MAJ_I1_L1, N_COLUMNS);
+relation!(MAJ_I1_H, N_COLUMNS);
+
+trace_columns!(
+    MajColumns,
+    i0_low_a,
+    i0_low_b,
+    i0_low_c,
+    i0_low_res,
+    i1_high_a,
+    i1_high_b,
+    i1_high_c,
+    i1_high_res,
+    i0_high_0_a,
+    i0_high_0_b,
+    i0_high_0_c,
+    i0_high_0_res,
+    i1_low_0_a,
+    i1_low_0_b,
+    i1_low_0_c,
+    i1_low_0_res,
+    i0_high_1_a,
+    i0_high_1_b,
+    i0_high_1_c,
+    i0_high_1_res,
+    i1_low_1_a,
+    i1_low_1_b,
+    i1_low_1_c,
+    i1_low_1_res,
+);
+
+trace_columns!(
+    MajI0LI1HColumns,
+    i0_low_a,
+    i0_low_b,
+    i0_low_c,
+    i0_low_res,
+    i1_high_a,
+    i1_high_b,
+    i1_high_c,
+    i1_high_res,
+);
+
+trace_columns!(
+    MajI0H0I1L0Columns,
+    i0_high_0_a,
+    i0_high_0_b,
+    i0_high_0_c,
+    i0_high_0_res,
+    i1_low_0_a,
+    i1_low_0_b,
+    i1_low_0_c,
+    i1_low_0_res,
+);
+
+trace_columns!(
+    MajI0H1I1L1Columns,
+    i0_high_1_a,
+    i0_high_1_b,
+    i0_high_1_c,
+    i0_high_1_res,
+    i1_low_1_a,
+    i1_low_1_b,
+    i1_low_1_c,
+    i1_low_1_res,
+);
 
 #[derive(Debug, Clone)]
 pub struct Relation {
-    pub i0_low: I0_L,
-    pub i0_high_0: I0_H0,
-    pub i0_high_1: I0_H1,
-    pub i1_low_0: I1_L0,
-    pub i1_low_1: I1_L1,
-    pub i1_high: I1_H,
+    pub i0_low: MAJ_I0_L,
+    pub i0_high_0: MAJ_I0_H0,
+    pub i0_high_1: MAJ_I0_H1,
+    pub i1_low_0: MAJ_I1_L0,
+    pub i1_low_1: MAJ_I1_L1,
+    pub i1_high: MAJ_I1_H,
 }
 
 impl Relation {
     pub fn dummy() -> Self {
         Self {
-            i0_low: I0_L::dummy(),
-            i0_high_0: I0_H0::dummy(),
-            i0_high_1: I0_H1::dummy(),
-            i1_low_0: I1_L0::dummy(),
-            i1_low_1: I1_L1::dummy(),
-            i1_high: I1_H::dummy(),
+            i0_low: MAJ_I0_L::dummy(),
+            i0_high_0: MAJ_I0_H0::dummy(),
+            i0_high_1: MAJ_I0_H1::dummy(),
+            i1_low_0: MAJ_I1_L0::dummy(),
+            i1_low_1: MAJ_I1_L1::dummy(),
+            i1_high: MAJ_I1_H::dummy(),
         }
     }
 
     pub fn draw(channel: &mut impl Channel) -> Self {
         Self {
-            i0_low: I0_L::draw(channel),
-            i0_high_0: I0_H0::draw(channel),
-            i0_high_1: I0_H1::draw(channel),
-            i1_low_0: I1_L0::draw(channel),
-            i1_low_1: I1_L1::draw(channel),
-            i1_high: I1_H::draw(channel),
+            i0_low: MAJ_I0_L::draw(channel),
+            i0_high_0: MAJ_I0_H0::draw(channel),
+            i0_high_1: MAJ_I0_H1::draw(channel),
+            i1_low_0: MAJ_I1_L0::draw(channel),
+            i1_low_1: MAJ_I1_L1::draw(channel),
+            i1_high: MAJ_I1_H::draw(channel),
         }
     }
 }
 
-pub struct Columns;
+pub fn gen_column_simd() -> Vec<Vec<u32x16>> {
+    let mut all_columns: Vec<Vec<u32x16>> = vec![Vec::new(); MajColumns::SIZE];
 
-impl PreProcessedColumn for Columns {
-    fn log_size(&self) -> Vec<u32> {
-        vec![
-            // I0_L lookup
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            BigSigma0Partitions::I0_L.count_ones() * 3,
-            // I0_H0 lookup
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            BigSigma0Partitions::I0_H0.count_ones() * 3,
-            // I0_H1 lookup
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            BigSigma0Partitions::I0_H1.count_ones() * 3,
-            // I1_L0 lookup
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            BigSigma0Partitions::I1_L0.count_ones() * 3,
-            // I1_L1 lookup
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            BigSigma0Partitions::I1_L1.count_ones() * 3,
-            // I1_H lookup
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-            BigSigma0Partitions::I1_H.count_ones() * 3,
-        ]
-    }
-
-    fn id(&self) -> Vec<PreProcessedColumnId> {
-        [
-            "I0_L_A",
-            "I0_L_B",
-            "I0_L_C",
-            "I0_L_RES",
-            "I0_H0_A",
-            "I0_H0_B",
-            "I0_H0_C",
-            "I0_H0_RES",
-            "I0_H1_A",
-            "I0_H1_B",
-            "I0_H1_C",
-            "I0_H1_RES",
-            "I1_L0_A",
-            "I1_L0_B",
-            "I1_L0_C",
-            "I1_L0_RES",
-            "I1_L1_A",
-            "I1_L1_B",
-            "I1_L1_C",
-            "I1_L1_RES",
-            "I1_H_A",
-            "I1_H_B",
-            "I1_H_C",
-            "I1_H_RES",
-        ]
-        .map(|i| PreProcessedColumnId {
-            id: format!("Maj_{}", i),
+    for (i, partition) in [
+        BigSigma0Partitions::I0_L,
+        BigSigma0Partitions::I1_H,
+        BigSigma0Partitions::I0_H0,
+        BigSigma0Partitions::I1_L0,
+        BigSigma0Partitions::I0_H1,
+        BigSigma0Partitions::I1_L1,
+    ]
+    .iter()
+    .enumerate()
+    {
+        // lookup
+        let tuples: Vec<(u32x16, u32x16, u32x16, u32x16)> = iproduct!(
+            SubsetIterator::new(*partition),
+            SubsetIterator::new(*partition),
+            SubsetIterator::new(*partition)
+        )
+        .chunks(16)
+        .into_iter()
+        .map(|chunk| {
+            let mut xs = [0u32; 16];
+            let mut ys = [0u32; 16];
+            let mut zs = [0u32; 16];
+            for (i, (x, y, z)) in chunk.enumerate() {
+                xs[i] = x;
+                ys[i] = y;
+                zs[i] = z;
+            }
+            let a = u32x16::from_array(xs);
+            let b = u32x16::from_array(ys);
+            let c = u32x16::from_array(zs);
+            (a, b, c, maj_u32x16(a, b, c))
         })
-        .to_vec()
-    }
+        .collect();
 
-    fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        let mut all_columns = Vec::with_capacity(26);
-
-        for partition in [
-            BigSigma0Partitions::I0_L,
-            BigSigma0Partitions::I0_H0,
-            BigSigma0Partitions::I0_H1,
-            BigSigma0Partitions::I1_L0,
-            BigSigma0Partitions::I1_L1,
-            BigSigma0Partitions::I1_H,
-        ] {
-            // I0 lookup
-            let domain = CanonicCoset::new(partition.count_ones() * 3).circle_domain();
-            let columns = SubsetIterator::new(partition)
-                .flat_map(move |x| SubsetIterator::new(partition).map(move |y| (x, y)))
-                .flat_map(move |x| {
-                    SubsetIterator::new(partition).map(move |y| {
-                        (
-                            BaseField::from_u32_unchecked(x.0),
-                            BaseField::from_u32_unchecked(x.1),
-                            BaseField::from_u32_unchecked(y),
-                            BaseField::from_u32_unchecked(maj(x.0, x.1, y)),
-                        )
-                    })
-                });
-
-            let (a, rest) = columns.tee();
-            let (b, rest) = rest.tee();
-            let (c, res) = rest.tee();
-
-            all_columns.extend(vec![
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(a.map(|t| t.0)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(b.map(|t| t.1)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(c.map(|t| t.2)),
-                ),
-                CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                    domain,
-                    BaseColumn::from_iter(res.map(|t| t.3)),
-                ),
-            ]);
+        for (a, b, c, res) in tuples {
+            all_columns[4 * i].push(a);
+            all_columns[4 * i + 1].push(b);
+            all_columns[4 * i + 2].push(c);
+            all_columns[4 * i + 3].push(res);
         }
-
-        all_columns
     }
+
+    all_columns
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use stwo::prover::backend::Column;
-
     use super::*;
+    use crate::sha256::maj;
 
     #[test]
     fn test_ids() {
-        assert_eq!(Columns.id().len(), N_COLUMNS * 6);
-
         assert_eq!(
-            Columns.id(),
-            vec![
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_L_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H0_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I0_H1_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L0_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_L1_RES".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_A".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_B".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_C".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Maj_I1_H_RES".to_string(),
-                },
-            ]
-        );
-    }
-
-    #[allow(clippy::cognitive_complexity)]
-    #[test]
-    fn test_gen_column_simd() {
-        let columns = Columns.gen_column_simd();
-        assert_eq!(columns.len(), N_COLUMNS * 6);
-        assert_eq!(
-            columns[0].values.len().ilog2(),
-            BigSigma0Partitions::I0_L.count_ones() * 3
-        );
-        assert_eq!(
-            columns[1].values.len().ilog2(),
-            BigSigma0Partitions::I0_L.count_ones() * 3
-        );
-        assert_eq!(
-            columns[2].values.len().ilog2(),
-            BigSigma0Partitions::I0_L.count_ones() * 3
-        );
-        assert_eq!(
-            columns[3].values.len().ilog2(),
-            BigSigma0Partitions::I0_L.count_ones() * 3
-        );
-        assert_eq!(
-            columns[4].values.len().ilog2(),
-            BigSigma0Partitions::I0_H0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[5].values.len().ilog2(),
-            BigSigma0Partitions::I0_H0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[6].values.len().ilog2(),
-            BigSigma0Partitions::I0_H0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[7].values.len().ilog2(),
-            BigSigma0Partitions::I0_H0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[8].values.len().ilog2(),
-            BigSigma0Partitions::I0_H1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[9].values.len().ilog2(),
-            BigSigma0Partitions::I0_H1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[10].values.len().ilog2(),
-            BigSigma0Partitions::I0_H1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[11].values.len().ilog2(),
-            BigSigma0Partitions::I0_H1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[12].values.len().ilog2(),
-            BigSigma0Partitions::I1_L0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[13].values.len().ilog2(),
-            BigSigma0Partitions::I1_L0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[14].values.len().ilog2(),
-            BigSigma0Partitions::I1_L0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[15].values.len().ilog2(),
-            BigSigma0Partitions::I1_L0.count_ones() * 3
-        );
-        assert_eq!(
-            columns[16].values.len().ilog2(),
-            BigSigma0Partitions::I1_L1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[17].values.len().ilog2(),
-            BigSigma0Partitions::I1_L1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[18].values.len().ilog2(),
-            BigSigma0Partitions::I1_L1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[19].values.len().ilog2(),
-            BigSigma0Partitions::I1_L1.count_ones() * 3
-        );
-        assert_eq!(
-            columns[20].values.len().ilog2(),
-            BigSigma0Partitions::I1_H.count_ones() * 3
-        );
-        assert_eq!(
-            columns[21].values.len().ilog2(),
-            BigSigma0Partitions::I1_H.count_ones() * 3
-        );
-        assert_eq!(
-            columns[22].values.len().ilog2(),
-            BigSigma0Partitions::I1_H.count_ones() * 3
-        );
-        assert_eq!(
-            columns[23].values.len().ilog2(),
-            BigSigma0Partitions::I1_H.count_ones() * 3
+            MajColumns::SIZE,
+            MajI0LI1HColumns::SIZE + MajI0H0I1L0Columns::SIZE + MajI0H1I1L1Columns::SIZE
         );
     }
 
     #[test]
     fn test_random_input() {
-        let columns = Columns.gen_column_simd();
+        let columns = gen_column_simd();
+
+        // Helper to flatten Vec<u32x16> into Vec<u32>
+        fn flatten_simd_column(col: &[u32x16]) -> Vec<u32> {
+            col.iter()
+                .flat_map(|v| v.as_array().iter().copied())
+                .collect()
+        }
 
         let mut lookup_i0_l: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        columns[0]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[1].values.to_cpu())
-            .zip(columns[2].values.to_cpu())
-            .zip(columns[3].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i0_l.insert(key, value);
-            });
-
-        let mut lookup_i0_h_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        columns[4]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[5].values.to_cpu())
-            .zip(columns[6].values.to_cpu())
-            .zip(columns[7].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i0_h_0.insert(key, value);
-            });
-
-        let mut lookup_i0_h_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        columns[8]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[9].values.to_cpu())
-            .zip(columns[10].values.to_cpu())
-            .zip(columns[11].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i0_h_1.insert(key, value);
-            });
-
-        let mut lookup_i1_l_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        columns[12]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[13].values.to_cpu())
-            .zip(columns[14].values.to_cpu())
-            .zip(columns[15].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i1_l_0.insert(key, value);
-            });
-
-        let mut lookup_i1_l_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
-
-        columns[16]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[17].values.to_cpu())
-            .zip(columns[18].values.to_cpu())
-            .zip(columns[19].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i1_l_1.insert(key, value);
-            });
+        let i0_l_0 = flatten_simd_column(&columns[0]);
+        let i0_l_1 = flatten_simd_column(&columns[1]);
+        let i0_l_2 = flatten_simd_column(&columns[2]);
+        let i0_l_3 = flatten_simd_column(&columns[3]);
+        for (((&a, &b), &c), &d) in i0_l_0.iter().zip(&i0_l_1).zip(&i0_l_2).zip(&i0_l_3) {
+            lookup_i0_l.insert((a, b, c), d);
+        }
 
         let mut lookup_i1_h: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        columns[20]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[21].values.to_cpu())
-            .zip(columns[22].values.to_cpu())
-            .zip(columns[23].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0, c.0), d.0))
-            .for_each(|(key, value)| {
-                lookup_i1_h.insert(key, value);
-            });
+        let i1_h_0 = flatten_simd_column(&columns[4]);
+        let i1_h_1 = flatten_simd_column(&columns[5]);
+        let i1_h_2 = flatten_simd_column(&columns[6]);
+        let i1_h_3 = flatten_simd_column(&columns[7]);
+        for (((&a, &b), &c), &d) in i1_h_0.iter().zip(&i1_h_1).zip(&i1_h_2).zip(&i1_h_3) {
+            lookup_i1_h.insert((a, b, c), d);
+        }
+
+        let mut lookup_i0_h_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
+        let i0_h_0_0 = flatten_simd_column(&columns[8]);
+        let i0_h_0_1 = flatten_simd_column(&columns[9]);
+        let i0_h_0_2 = flatten_simd_column(&columns[10]);
+        let i0_h_0_3 = flatten_simd_column(&columns[11]);
+        for (((&a, &b), &c), &d) in i0_h_0_0.iter().zip(&i0_h_0_1).zip(&i0_h_0_2).zip(&i0_h_0_3) {
+            lookup_i0_h_0.insert((a, b, c), d);
+        }
+
+        let mut lookup_i1_l_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
+        let i1_l_0_0 = flatten_simd_column(&columns[12]);
+        let i1_l_0_1 = flatten_simd_column(&columns[13]);
+        let i1_l_0_2 = flatten_simd_column(&columns[14]);
+        let i1_l_0_3 = flatten_simd_column(&columns[15]);
+        for (((&a, &b), &c), &d) in i1_l_0_0.iter().zip(&i1_l_0_1).zip(&i1_l_0_2).zip(&i1_l_0_3) {
+            lookup_i1_l_0.insert((a, b, c), d);
+        }
+
+        let mut lookup_i0_h_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
+        let i0_h_1_0 = flatten_simd_column(&columns[16]);
+        let i0_h_1_1 = flatten_simd_column(&columns[17]);
+        let i0_h_1_2 = flatten_simd_column(&columns[18]);
+        let i0_h_1_3 = flatten_simd_column(&columns[19]);
+        for (((&a, &b), &c), &d) in i0_h_1_0.iter().zip(&i0_h_1_1).zip(&i0_h_1_2).zip(&i0_h_1_3) {
+            lookup_i0_h_1.insert((a, b, c), d);
+        }
+
+        let mut lookup_i1_l_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
+        let i1_l_1_0 = flatten_simd_column(&columns[20]);
+        let i1_l_1_1 = flatten_simd_column(&columns[21]);
+        let i1_l_1_2 = flatten_simd_column(&columns[22]);
+        let i1_l_1_3 = flatten_simd_column(&columns[23]);
+        for (((&a, &b), &c), &d) in i1_l_1_0.iter().zip(&i1_l_1_1).zip(&i1_l_1_2).zip(&i1_l_1_3) {
+            lookup_i1_l_1.insert((a, b, c), d);
+        }
 
         let (a_low, a_high) = (123456789_u32 & 0xffff, 123456789_u32 >> 16);
         let (b_low, b_high) = (987654321_u32 & 0xffff, 987654321_u32 >> 16);

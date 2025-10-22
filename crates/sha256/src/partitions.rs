@@ -104,6 +104,7 @@ pub mod BigSigma1 {
 }
 
 /// Generates all subsets of the given bitmask `mask`
+#[derive(Debug, Clone)]
 pub struct SubsetIterator {
     bit_pos: [u8; 32],
     k: u8,
@@ -267,9 +268,8 @@ mod test {
     #[test]
     fn test_subset_iterator_double() {
         let mask = 0b101;
-        let result = SubsetIterator::new(mask)
-            .flat_map(move |x| SubsetIterator::new(mask).map(move |y| (x, y)))
-            .collect::<Vec<_>>();
+        let result = itertools::iproduct!(SubsetIterator::new(mask), SubsetIterator::new(mask))
+            .collect::<Vec<(u32, u32)>>();
         assert_eq!(
             result,
             vec![

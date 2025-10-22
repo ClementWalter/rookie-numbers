@@ -24,14 +24,14 @@ fn bench_rookie<const N: usize>(bencher: divan::Bencher, log_size: u32) {
         let proof = result.unwrap();
 
         let proof_size = bincode::serialize(&proof).unwrap().len();
-        println!("Bincode proof size: {} bytes", proof_size);
+        println!("Bincode proof size: {proof_size} bytes");
         divan::black_box(proof_size);
         let proof_size = serde_json::to_vec(&proof).unwrap().len();
-        println!("Serde JSON proof size: {} bytes", proof_size);
+        println!("Serde JSON proof size: {proof_size} bytes");
         divan::black_box(proof_size);
 
         let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
-        println!("Peak memory: {} MB", peak_bytes);
+        println!("Peak memory: {peak_bytes} MB");
         divan::black_box(peak_bytes);
     });
 }

@@ -502,7 +502,7 @@ lookup_big_sigma_0 = {
     for high_0 in get_subset(I0_H0)
     for high_1 in get_subset(I0_H1)
 }
-lookup_big_sigma1 = {
+lookup_big_sigma_1 = {
     (low_0, low_1, high): (
         sigma(low_0 + 2**8 * low_1 + 2**16 * high, *params) & O1_L,
         (sigma(low_0 + 2**8 * low_1 + 2**16 * high, *params) >> 16) & O1_H,
@@ -551,7 +551,7 @@ e_0_low = e_low - e_1_low_0 - 2**8 * e_1_low_1
 
 #' Lookup intermediate values (this also range check the 6 limbs): 8T + 3L
 o0_l, o0_h, o20 = lookup_big_sigma_0[(e_0_low, e_0_high_0, e_0_high_1)]
-o1_l, o1_h, o21 = lookup_big_sigma1[(e_1_low_0, e_1_low_1, e_1_high)]
+o1_l, o1_h, o21 = lookup_big_sigma_1[(e_1_low_0, e_1_low_1, e_1_high)]
 o2_l, o2_h = lookup_xor[(o20, o21)]
 
 #' Debug test
@@ -612,3 +612,5 @@ assert (
     d_h + h_h + s_h + ch_h + k_h + w_h - 2**16 * carry_high,
     carry_high,
 ) in range_check_16_carry
+
+# %%

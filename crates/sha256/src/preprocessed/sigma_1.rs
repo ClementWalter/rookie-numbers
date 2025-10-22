@@ -1,385 +1,234 @@
-use itertools::Itertools;
-use stwo::{
-    core::{channel::Channel, fields::m31::BaseField, poly::circle::CanonicCoset},
-    prover::{
-        backend::simd::{column::BaseColumn, SimdBackend},
-        poly::{circle::CircleEvaluation, BitReversedOrder},
-    },
-};
-use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
+use std::simd::u32x16;
+
+use itertools::{iproduct, Itertools};
+use stwo::core::channel::Channel;
+use stwo_constraint_framework::relation;
 
 use crate::{
-    partitions::{pext_u32, Sigma1 as Sigma1Partitions, SubsetIterator},
-    preprocessed::PreProcessedColumn,
-    sha256::small_sigma1,
+    partitions::{pext_u32x16, Sigma1 as Sigma1Partitions, SubsetIterator},
+    sha256::small_sigma_1_u32x16,
+    trace_columns,
 };
 
 const N_IO_COLUMNS: usize = 5;
 const N_I1_COLUMNS: usize = 5;
 const N_O2_COLUMNS: usize = 4;
 
-relation!(I0, N_IO_COLUMNS);
-relation!(I1, N_I1_COLUMNS);
-relation!(O2, N_O2_COLUMNS);
+relation!(SIGMA_1_I0, N_IO_COLUMNS);
+relation!(SIGMA_1_I1, N_I1_COLUMNS);
+relation!(SIGMA_1_O2, N_O2_COLUMNS);
+
+trace_columns!(
+    Sigma1Columns,
+    i0_low,
+    i0_high,
+    o0_low,
+    o0_high,
+    o20_pext,
+    i1_low,
+    i1_high,
+    o1_low,
+    o1_high,
+    o21_pext,
+    o2_0,
+    o2_1,
+    o2_low,
+    o2_high,
+);
+
+trace_columns!(
+    Sigma1I0I1Columns,
+    i0_low,
+    i0_high,
+    o0_low,
+    o0_high,
+    o20_pext,
+    i1_low,
+    i1_high,
+    o1_low,
+    o1_high,
+    o21_pext
+);
+
+trace_columns!(Sigma1O2Columns, o2_0, o2_1, o2_low, o2_high);
 
 #[derive(Debug, Clone)]
 pub struct Relation {
-    pub i0: I0,
-    pub i1: I1,
-    pub o2: O2,
+    pub i0: SIGMA_1_I0,
+    pub i1: SIGMA_1_I1,
+    pub o2: SIGMA_1_O2,
 }
 
 impl Relation {
     pub fn dummy() -> Self {
         Self {
-            i0: I0::dummy(),
-            i1: I1::dummy(),
-            o2: O2::dummy(),
+            i0: SIGMA_1_I0::dummy(),
+            i1: SIGMA_1_I1::dummy(),
+            o2: SIGMA_1_O2::dummy(),
         }
     }
 
     pub fn draw(channel: &mut impl Channel) -> Self {
         Self {
-            i0: I0::draw(channel),
-            i1: I1::draw(channel),
-            o2: O2::draw(channel),
+            i0: SIGMA_1_I0::draw(channel),
+            i1: SIGMA_1_I1::draw(channel),
+            o2: SIGMA_1_O2::draw(channel),
         }
     }
 }
 
-pub struct Columns;
-
-impl PreProcessedColumn for Columns {
-    fn log_size(&self) -> Vec<u32> {
-        vec![
-            // IO lookup
-            Sigma1Partitions::I0.count_ones(),
-            Sigma1Partitions::I0.count_ones(),
-            Sigma1Partitions::I0.count_ones(),
-            Sigma1Partitions::I0.count_ones(),
-            Sigma1Partitions::I0.count_ones(),
-            // I1 lookup
-            Sigma1Partitions::I1.count_ones(),
-            Sigma1Partitions::I1.count_ones(),
-            Sigma1Partitions::I1.count_ones(),
-            Sigma1Partitions::I1.count_ones(),
-            Sigma1Partitions::I1.count_ones(),
-            // O2 lookup
-            Sigma1Partitions::O2.count_ones(),
-            Sigma1Partitions::O2.count_ones(),
-            Sigma1Partitions::O2.count_ones(),
-            Sigma1Partitions::O2.count_ones(),
-        ]
-    }
-
-    fn id(&self) -> Vec<PreProcessedColumnId> {
-        [
-            "I0_L", "I0_H", "O0_L", "O0_H", "O20", // IO lookup
-            "I1_L", "I1_H", "O1_L", "O1_H", "O21", // I1 lookup
-            "O2_0", "O2_1", "O2_L", "O2_H", // O2 lookup
-        ]
-        .map(|i| PreProcessedColumnId {
-            id: format!("Sigma1_{}", i),
-        })
-        .to_vec()
-    }
-
-    fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        // I0 lookup
-        let domain_i0 = CanonicCoset::new(Sigma1Partitions::I0.count_ones()).circle_domain();
-        let i0_columns = SubsetIterator::new(Sigma1Partitions::I0)
-            .map(|x| (x, small_sigma1(x)))
+pub fn gen_column_simd() -> Vec<Vec<u32x16>> {
+    // I0 lookup
+    let i0_tuples: Vec<(u32x16, u32x16, u32x16, u32x16, u32x16)> =
+        SubsetIterator::new(Sigma1Partitions::I0)
+            .collect::<Vec<u32>>()
+            .chunks(16)
+            .map(u32x16::from_slice)
+            .map(|x| (x, small_sigma_1_u32x16(x)))
             .map(|(x, y)| {
                 (
-                    BaseField::from_u32_unchecked(x & Sigma1Partitions::I0_L),
-                    BaseField::from_u32_unchecked((x >> 16) & Sigma1Partitions::I0_H),
-                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O0_L),
-                    BaseField::from_u32_unchecked((y >> 16) & Sigma1Partitions::O0_H),
-                    BaseField::from_u32_unchecked(pext_u32(y, Sigma1Partitions::O2)),
+                    x & u32x16::splat(Sigma1Partitions::I0_L),
+                    (x >> 16) & u32x16::splat(Sigma1Partitions::I0_H),
+                    y & u32x16::splat(Sigma1Partitions::O0_L),
+                    (y >> 16) & u32x16::splat(Sigma1Partitions::O0_H),
+                    pext_u32x16(y, Sigma1Partitions::O2),
                 )
-            });
+            })
+            .collect();
 
-        let (i0_l, rest) = i0_columns.tee();
-        let (i0_h, rest) = rest.tee();
-        let (o0_l, rest) = rest.tee();
-        let (o0_h, o20) = rest.tee();
-
-        let i0_columns = vec![
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i0,
-                BaseColumn::from_iter(i0_l.map(|t| t.0)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i0,
-                BaseColumn::from_iter(i0_h.map(|t| t.1)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i0,
-                BaseColumn::from_iter(o0_l.map(|t| t.2)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i0,
-                BaseColumn::from_iter(o0_h.map(|t| t.3)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i0,
-                BaseColumn::from_iter(o20.map(|t| t.4)),
-            ),
-        ];
-
-        // I1 lookup
-        let domain_i1 = CanonicCoset::new(Sigma1Partitions::I1.count_ones()).circle_domain();
-        let i1_columns = SubsetIterator::new(Sigma1Partitions::I1)
-            .map(|x| (x, small_sigma1(x)))
-            .map(|(x, y)| {
-                (
-                    BaseField::from_u32_unchecked(x & Sigma1Partitions::I1_L),
-                    BaseField::from_u32_unchecked((x >> 16) & Sigma1Partitions::I1_H),
-                    BaseField::from_u32_unchecked(y & Sigma1Partitions::O1_L),
-                    BaseField::from_u32_unchecked((y >> 16) & Sigma1Partitions::O1_H),
-                    BaseField::from_u32_unchecked(pext_u32(y, Sigma1Partitions::O2)),
-                )
-            });
-
-        let (i1_l, rest) = i1_columns.tee();
-        let (i1_h, rest) = rest.tee();
-        let (o1_l, rest) = rest.tee();
-        let (o1_h, o21) = rest.tee();
-
-        let i1_columns = vec![
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i1,
-                BaseColumn::from_iter(i1_l.map(|t| t.0)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i1,
-                BaseColumn::from_iter(i1_h.map(|t| t.1)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i1,
-                BaseColumn::from_iter(o1_l.map(|t| t.2)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i1,
-                BaseColumn::from_iter(o1_h.map(|t| t.3)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_i1,
-                BaseColumn::from_iter(o21.map(|t| t.4)),
-            ),
-        ];
-
-        // O2 lookup
-        let domain_o2 = CanonicCoset::new(Sigma1Partitions::O2.count_ones() * 2).circle_domain();
-        let o2_columns = SubsetIterator::new(Sigma1Partitions::O2)
-            .flat_map(move |x| SubsetIterator::new(Sigma1Partitions::O2).map(move |y| (x, y)))
-            .map(|(x, y)| {
-                (
-                    BaseField::from_u32_unchecked(pext_u32(x, Sigma1Partitions::O2)),
-                    BaseField::from_u32_unchecked(pext_u32(y, Sigma1Partitions::O2)),
-                    BaseField::from_u32_unchecked((x ^ y) & 0xffff),
-                    BaseField::from_u32_unchecked((x ^ y) >> 16),
-                )
-            });
-
-        let (o2_0, rest) = o2_columns.tee();
-        let (o2_1, rest) = rest.tee();
-        let (o2_l, o2_h) = rest.tee();
-
-        let o2_columns = vec![
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_o2,
-                BaseColumn::from_iter(o2_0.map(|t| t.0)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_o2,
-                BaseColumn::from_iter(o2_1.map(|t| t.1)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_o2,
-                BaseColumn::from_iter(o2_l.map(|t| t.2)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain_o2,
-                BaseColumn::from_iter(o2_h.map(|t| t.3)),
-            ),
-        ];
-
-        i0_columns
-            .into_iter()
-            .chain(i1_columns)
-            .chain(o2_columns)
-            .collect()
+    let mut i0_columns: Vec<Vec<u32x16>> = vec![Vec::new(); N_IO_COLUMNS];
+    for (a, b, c, d, e) in i0_tuples.into_iter() {
+        i0_columns[0].push(a);
+        i0_columns[1].push(b);
+        i0_columns[2].push(c);
+        i0_columns[3].push(d);
+        i0_columns[4].push(e);
     }
+
+    // I1 lookup
+    let i1_tuples: Vec<(u32x16, u32x16, u32x16, u32x16, u32x16)> =
+        SubsetIterator::new(Sigma1Partitions::I1)
+            .collect::<Vec<u32>>()
+            .chunks(16)
+            .map(u32x16::from_slice)
+            .map(|x| (x, small_sigma_1_u32x16(x)))
+            .map(|(x, y)| {
+                (
+                    x & u32x16::splat(Sigma1Partitions::I1_L),
+                    (x >> 16) & u32x16::splat(Sigma1Partitions::I1_H),
+                    y & u32x16::splat(Sigma1Partitions::O1_L),
+                    (y >> 16) & u32x16::splat(Sigma1Partitions::O1_H),
+                    pext_u32x16(y, Sigma1Partitions::O2),
+                )
+            })
+            .collect();
+
+    let mut i1_columns: Vec<Vec<u32x16>> = vec![Vec::new(); N_I1_COLUMNS];
+    for (a, b, c, d, e) in i1_tuples.into_iter() {
+        i1_columns[0].push(a);
+        i1_columns[1].push(b);
+        i1_columns[2].push(c);
+        i1_columns[3].push(d);
+        i1_columns[4].push(e);
+    }
+
+    // O2 lookup
+    let o2_tuples: Vec<(u32x16, u32x16, u32x16, u32x16)> = iproduct!(
+        SubsetIterator::new(Sigma1Partitions::O2),
+        SubsetIterator::new(Sigma1Partitions::O2)
+    )
+    .chunks(16)
+    .into_iter()
+    .map(|chunk| {
+        let (xs, ys): (Vec<_>, Vec<_>) = chunk.collect::<Vec<_>>().into_iter().unzip();
+        (u32x16::from_slice(&xs), u32x16::from_slice(&ys))
+    })
+    .map(|(x, y)| {
+        (
+            pext_u32x16(x, Sigma1Partitions::O2),
+            pext_u32x16(y, Sigma1Partitions::O2),
+            (x ^ y) & u32x16::splat(0xffff),
+            (x ^ y) >> u32x16::splat(16),
+        )
+    })
+    .collect();
+
+    let mut o2_columns: Vec<Vec<u32x16>> = vec![Vec::new(); N_O2_COLUMNS];
+    for (a, b, c, d) in o2_tuples.into_iter() {
+        o2_columns[0].push(a);
+        o2_columns[1].push(b);
+        o2_columns[2].push(c);
+        o2_columns[3].push(d);
+    }
+
+    i0_columns
+        .into_iter()
+        .chain(i1_columns)
+        .chain(o2_columns)
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use stwo::prover::backend::Column;
-
     use super::*;
+    use crate::sha256::small_sigma_1;
 
-    const N_COLUMNS: usize = N_IO_COLUMNS + N_I1_COLUMNS + N_O2_COLUMNS;
     #[test]
     fn test_ids() {
-        assert_eq!(Columns.id().len(), N_COLUMNS);
-        assert_eq!(
-            Columns.id(),
-            vec![
-                PreProcessedColumnId {
-                    id: "Sigma1_I0_L".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_I0_H".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O0_L".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O0_H".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O20".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_I1_L".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_I1_H".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O1_L".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O1_H".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O21".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O2_0".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O2_1".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O2_L".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "Sigma1_O2_H".to_string(),
-                },
-            ]
-        );
+        assert_eq!(Sigma1I0I1Columns::to_ids().len(), Sigma1I0I1Columns::SIZE);
+        assert_eq!(Sigma1O2Columns::to_ids().len(), Sigma1O2Columns::SIZE);
     }
 
     #[test]
     fn test_gen_column_simd() {
-        let columns = Columns.gen_column_simd();
-        assert_eq!(columns.len(), N_COLUMNS);
+        let columns = gen_column_simd();
         assert_eq!(
-            columns[0].values.len().ilog2(),
-            Sigma1Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[1].values.len().ilog2(),
-            Sigma1Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[2].values.len().ilog2(),
-            Sigma1Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[3].values.len().ilog2(),
-            Sigma1Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[4].values.len().ilog2(),
-            Sigma1Partitions::I0.count_ones()
-        );
-        assert_eq!(
-            columns[5].values.len().ilog2(),
-            Sigma1Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[6].values.len().ilog2(),
-            Sigma1Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[7].values.len().ilog2(),
-            Sigma1Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[8].values.len().ilog2(),
-            Sigma1Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[9].values.len().ilog2(),
-            Sigma1Partitions::I1.count_ones()
-        );
-        assert_eq!(
-            columns[10].values.len().ilog2(),
-            Sigma1Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[11].values.len().ilog2(),
-            Sigma1Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[12].values.len().ilog2(),
-            Sigma1Partitions::O2.count_ones() * 2
-        );
-        assert_eq!(
-            columns[13].values.len().ilog2(),
-            Sigma1Partitions::O2.count_ones() * 2
+            columns.len(),
+            Sigma1I0I1Columns::SIZE + Sigma1O2Columns::SIZE
         );
     }
 
     #[test]
     fn test_random_input() {
-        let columns = Columns.gen_column_simd();
+        let columns = gen_column_simd();
+
+        // Helper to flatten Vec<u32x16> into Vec<u32>
+        fn flatten_simd_column(col: &[u32x16]) -> Vec<u32> {
+            col.iter()
+                .flat_map(|v| v.as_array().iter().copied())
+                .collect()
+        }
 
         let mut lookup_i0: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
-        columns[0]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[1].values.to_cpu())
-            .zip(columns[2].values.to_cpu())
-            .zip(columns[3].values.to_cpu())
-            .zip(columns[4].values.to_cpu())
-            .map(|((((a, b), c), d), e)| ((a.0, b.0), (c.0, d.0, e.0)))
-            .for_each(|(key, value)| {
-                lookup_i0.insert(key, value);
-            });
+        let i0_0 = flatten_simd_column(&columns[0]);
+        let i0_1 = flatten_simd_column(&columns[1]);
+        let i0_2 = flatten_simd_column(&columns[2]);
+        let i0_3 = flatten_simd_column(&columns[3]);
+        let i0_4 = flatten_simd_column(&columns[4]);
+        for ((((&a, &b), &c), &d), &e) in i0_0.iter().zip(&i0_1).zip(&i0_2).zip(&i0_3).zip(&i0_4) {
+            lookup_i0.insert((a, b), (c, d, e));
+        }
 
         let mut lookup_i1: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
-        columns[5]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[6].values.to_cpu())
-            .zip(columns[7].values.to_cpu())
-            .zip(columns[8].values.to_cpu())
-            .zip(columns[9].values.to_cpu())
-            .map(|((((a, b), c), d), e)| ((a.0, b.0), (c.0, d.0, e.0)))
-            .for_each(|(key, value)| {
-                lookup_i1.insert(key, value);
-            });
+        let i1_0 = flatten_simd_column(&columns[5]);
+        let i1_1 = flatten_simd_column(&columns[6]);
+        let i1_2 = flatten_simd_column(&columns[7]);
+        let i1_3 = flatten_simd_column(&columns[8]);
+        let i1_4 = flatten_simd_column(&columns[9]);
+        for ((((&a, &b), &c), &d), &e) in i1_0.iter().zip(&i1_1).zip(&i1_2).zip(&i1_3).zip(&i1_4) {
+            lookup_i1.insert((a, b), (c, d, e));
+        }
 
         let mut lookup_o2: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
-        columns[10]
-            .values
-            .to_cpu()
-            .into_iter()
-            .zip(columns[11].values.to_cpu())
-            .zip(columns[12].values.to_cpu())
-            .zip(columns[13].values.to_cpu())
-            .map(|(((a, b), c), d)| ((a.0, b.0), (c.0, d.0)))
-            .for_each(|(key, value)| {
-                lookup_o2.insert(key, value);
-            });
+        let o2_0 = flatten_simd_column(&columns[10]);
+        let o2_1 = flatten_simd_column(&columns[11]);
+        let o2_2 = flatten_simd_column(&columns[12]);
+        let o2_3 = flatten_simd_column(&columns[13]);
+        for (((&a, &b), &c), &d) in o2_0.iter().zip(&o2_1).zip(&o2_2).zip(&o2_3) {
+            lookup_o2.insert((a, b), (c, d));
+        }
 
         let (x_low, x_high) = (123456789_u32 & 0xffff, 123456789_u32 >> 16);
 
@@ -403,7 +252,7 @@ mod tests {
         let (o2_l, o2_h) = lookup_o2_value.unwrap();
 
         // Check the result
-        let expected = small_sigma1(x_low + (x_high << 16));
+        let expected = small_sigma_1(x_low + (x_high << 16));
         assert_eq!(o0_l + o1_l + o2_l, expected & 0xffff);
         assert_eq!(o0_h + o1_h + o2_h, expected >> 16);
     }

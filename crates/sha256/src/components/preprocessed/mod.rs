@@ -1,28 +1,30 @@
-use stwo::{
-    core::{fields::m31::BaseField, ColumnVec},
-    prover::{
-        backend::simd::SimdBackend,
-        poly::{circle::CircleEvaluation, BitReversedOrder},
-    },
-};
+mod big_sigma_0;
+mod big_sigma_1;
+mod ch_left;
+mod ch_right;
+mod maj;
+mod range_check_add;
+mod sigma_0;
+mod sigma_1;
 
-use crate::relations::Relations;
+use crate::components;
 
-mod sigma_0_i0_i1;
-
-pub fn gen_trace(
-    scheduling: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-) -> ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-    let _sigma_0 = sigma_0_i0_i1::witness::gen_trace(scheduling);
-
-    vec![]
-}
-
-pub fn gen_interaction_trace(
-    scheduling: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    relations: &Relations,
-) -> ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-    let _sigma_0 = sigma_0_i0_i1::witness::gen_interaction_trace(scheduling, relations);
-
-    vec![]
-}
+components!(
+    sigma_0::i0_i1,
+    sigma_1::i0_i1,
+    sigma_0::o2,
+    sigma_1::o2,
+    big_sigma_0::i0_i1,
+    big_sigma_0::o2,
+    big_sigma_1::i0,
+    big_sigma_1::i1,
+    big_sigma_1::o2,
+    ch_left::i0,
+    ch_left::i1,
+    ch_right::i0,
+    ch_right::i1,
+    maj::i0h0_i1l0,
+    maj::i0h1_i1l1,
+    maj::i0l_i1h,
+    range_check_add::range_check_add,
+);

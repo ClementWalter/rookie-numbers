@@ -26,9 +26,9 @@ lint:
   enabled:
     - bandit@1.8.6
     - black@25.9.0
-    - checkov@3.2.484
+    - checkov@3.2.486
     - isort@7.0.0
-    - ruff@0.14.0
+    - ruff@0.14.1
     - yamllint@1.37.1
     - clippy@SYSTEM
     - git-diff-check
@@ -38,6 +38,10 @@ lint:
     - rustfmt@SYSTEM
     - taplo@0.10.0
     - trufflehog@3.90.11
+  ignore:
+    - linters: [ALL]
+      paths:
+        - external/**
 actions:
   disabled:
     - trunk-announce

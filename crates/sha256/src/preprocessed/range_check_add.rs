@@ -1,14 +1,9 @@
-use itertools::Itertools;
-use stwo::{
-    core::{channel::Channel, fields::m31::BaseField, poly::circle::CanonicCoset},
-    prover::{
-        backend::simd::{column::BaseColumn, SimdBackend},
-        poly::{circle::CircleEvaluation, BitReversedOrder},
-    },
-};
-use stwo_constraint_framework::{preprocessed_columns::PreProcessedColumnId, relation};
+use std::simd::u32x16;
 
-use crate::preprocessed::PreProcessedColumn;
+use stwo::core::channel::Channel;
+use stwo_constraint_framework::relation;
+
+use crate::trace_columns;
 
 // [value, carry]
 const N_COLUMNS: usize = 2;
@@ -16,6 +11,8 @@ const N_COLUMNS: usize = 2;
 relation!(Add4, N_COLUMNS);
 relation!(Add7, N_COLUMNS);
 relation!(Add8, N_COLUMNS);
+
+trace_columns!(RangeCheckAddColumns, value, carry_4, carry_7, carry_8,);
 
 #[derive(Debug, Clone)]
 pub struct Relation {
@@ -42,108 +39,48 @@ impl Relation {
     }
 }
 
-pub struct Columns;
+pub fn gen_column_simd() -> Vec<Vec<u32x16>> {
+    const N: usize = 1 << 15;
+    let mut all_columns = vec![
+        Vec::with_capacity(N),
+        Vec::with_capacity(N),
+        Vec::with_capacity(N),
+        Vec::with_capacity(N),
+    ];
 
-impl PreProcessedColumn for Columns {
-    /// For columns, one for RangeCheck16, and one for each carry. Unused carries are 0.
-    fn log_size(&self) -> Vec<u32> {
-        vec![19, 19, 19, 19]
+    let carry_4 = u32x16::from_array([0, 1, 2, 3, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0]);
+    let carry_7 = u32x16::from_array([0, 1, 2, 3, 4, 5, 6, 0, 0, 1, 2, 3, 4, 5, 6, 0]);
+    let carry_8 = u32x16::from_array([0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]);
+
+    for i in 0..1 << 15 {
+        let value = u32x16::from_array(std::array::from_fn(|j| i * 2 + (j > 7) as u32));
+        all_columns[0].push(value);
+        all_columns[1].push(carry_4);
+        all_columns[2].push(carry_7);
+        all_columns[3].push(carry_8);
     }
 
-    fn id(&self) -> Vec<PreProcessedColumnId> {
-        ["LIMB", "CARRY_4", "CARRY_7", "CARRY_8"]
-            .map(|i| PreProcessedColumnId {
-                id: format!("range_check_add_{}", i),
-            })
-            .to_vec()
-    }
-
-    fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        let mut all_columns = Vec::with_capacity(N_COLUMNS);
-
-        // I0 lookup
-        let domain = CanonicCoset::new(19).circle_domain();
-
-        let columns = (0..1 << 16).flat_map(move |limb| {
-            let carry_4 = [0, 1, 2, 3, 0, 0, 0, 0].into_iter();
-            let carry_7 = [0, 1, 2, 3, 4, 5, 6, 0].into_iter();
-            let carry_8 = [0, 1, 2, 3, 4, 5, 6, 7].into_iter();
-            carry_4
-                .zip(carry_7)
-                .zip(carry_8)
-                .map(move |((c_4, c_7), c_8)| {
-                    (
-                        BaseField::from_u32_unchecked(limb),
-                        BaseField::from_u32_unchecked(c_4),
-                        BaseField::from_u32_unchecked(c_7),
-                        BaseField::from_u32_unchecked(c_8),
-                    )
-                })
-        });
-
-        let (limb, rest) = columns.tee();
-        let (carry_4, rest) = rest.tee();
-        let (carry_7, carry_8) = rest.tee();
-
-        all_columns.extend(vec![
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain,
-                BaseColumn::from_iter(limb.map(|t| t.0)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain,
-                BaseColumn::from_iter(carry_4.map(|t| t.1)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain,
-                BaseColumn::from_iter(carry_7.map(|t| t.2)),
-            ),
-            CircleEvaluation::<SimdBackend, BaseField, BitReversedOrder>::new(
-                domain,
-                BaseColumn::from_iter(carry_8.map(|t| t.3)),
-            ),
-        ]);
-
-        all_columns
-    }
+    all_columns
 }
 
 #[cfg(test)]
 mod tests {
-    use stwo::prover::backend::Column;
+    use stwo::prover::backend::simd::m31::LOG_N_LANES;
 
     use super::*;
 
     #[test]
     fn test_ids() {
-        assert_eq!(Columns.id().len(), 4);
-
-        assert_eq!(
-            Columns.id(),
-            vec![
-                PreProcessedColumnId {
-                    id: "range_check_add_LIMB".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "range_check_add_CARRY_4".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "range_check_add_CARRY_7".to_string(),
-                },
-                PreProcessedColumnId {
-                    id: "range_check_add_CARRY_8".to_string(),
-                },
-            ]
-        );
+        assert_eq!(RangeCheckAddColumns::SIZE, 4);
     }
 
     #[test]
     fn test_gen_column_simd() {
-        let columns = Columns.gen_column_simd();
-        assert_eq!(columns.len(), 4);
-        assert_eq!(columns[0].values.len().ilog2(), 19);
-        assert_eq!(columns[1].values.len().ilog2(), 19);
-        assert_eq!(columns[2].values.len().ilog2(), 19);
-        assert_eq!(columns[3].values.len().ilog2(), 19);
+        let columns = gen_column_simd();
+        assert_eq!(columns.len(), RangeCheckAddColumns::SIZE);
+        assert_eq!(columns[0].len().ilog2(), 19 - LOG_N_LANES);
+        assert_eq!(columns[1].len().ilog2(), 19 - LOG_N_LANES);
+        assert_eq!(columns[2].len().ilog2(), 19 - LOG_N_LANES);
+        assert_eq!(columns[3].len().ilog2(), 19 - LOG_N_LANES);
     }
 }

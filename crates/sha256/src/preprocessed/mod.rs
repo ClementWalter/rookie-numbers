@@ -11,6 +11,8 @@ use stwo::{
 };
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 
+use crate::circle_evaluation_u32x16;
+
 pub mod big_sigma_0;
 pub mod big_sigma_1;
 pub mod ch_left;
@@ -20,44 +22,77 @@ pub mod range_check_add;
 pub mod sigma_0;
 pub mod sigma_1;
 
-pub trait PreProcessedColumn {
-    fn log_size(&self) -> Vec<u32>;
-    fn id(&self) -> Vec<PreProcessedColumnId>;
-    fn gen_column_simd(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>;
-}
+pub struct PreProcessedTrace;
 
-pub struct PreProcessedTrace {
-    columns: Vec<Box<dyn PreProcessedColumn>>,
-}
 impl PreProcessedTrace {
-    pub fn log_sizes(&self) -> Vec<u32> {
-        self.columns.iter().flat_map(|c| c.log_size()).collect()
-    }
-
     pub fn gen_trace(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        self.columns
-            .iter()
-            .flat_map(|c| c.gen_column_simd())
-            .collect()
+        let mut traces = vec![];
+
+        traces.extend(
+            big_sigma_0::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            big_sigma_1::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            ch_left::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            ch_right::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            maj::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            range_check_add::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            sigma_0::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+        traces.extend(
+            sigma_1::gen_column_simd()
+                .into_iter()
+                .map(|c| circle_evaluation_u32x16!(c)),
+        );
+
+        traces
     }
 
     pub fn ids(&self) -> Vec<PreProcessedColumnId> {
-        self.columns.iter().flat_map(|c| c.id()).collect()
-    }
-}
+        let mut ids = vec![];
 
-impl Default for PreProcessedTrace {
-    fn default() -> Self {
-        let columns: Vec<Box<dyn PreProcessedColumn>> = vec![
-            Box::new(big_sigma_0::Columns),
-            Box::new(big_sigma_1::Columns),
-            Box::new(ch_left::Columns),
-            Box::new(ch_right::Columns),
-            Box::new(maj::Columns),
-            Box::new(range_check_add::Columns),
-            Box::new(sigma_0::Columns),
-            Box::new(sigma_1::Columns),
-        ];
-        Self { columns }
+        ids.extend(big_sigma_0::BigSigma0I0I1Columns::to_ids());
+        ids.extend(big_sigma_0::BigSigma0O2Columns::to_ids());
+        ids.extend(big_sigma_1::BigSigma1I0Columns::to_ids());
+        ids.extend(big_sigma_1::BigSigma1I1Columns::to_ids());
+        ids.extend(big_sigma_1::BigSigma1O2Columns::to_ids());
+        ids.extend(ch_left::ChLeftI0Columns::to_ids());
+        ids.extend(ch_left::ChLeftI1Columns::to_ids());
+        ids.extend(ch_right::ChRightI0Columns::to_ids());
+        ids.extend(ch_right::ChRightI1Columns::to_ids());
+        ids.extend(maj::MajI0LI1HColumns::to_ids());
+        ids.extend(maj::MajI0H0I1L0Columns::to_ids());
+        ids.extend(maj::MajI0H1I1L1Columns::to_ids());
+        ids.extend(range_check_add::RangeCheckAddColumns::to_ids());
+        ids.extend(sigma_0::Sigma0I0I1Columns::to_ids());
+        ids.extend(sigma_0::Sigma0O2Columns::to_ids());
+        ids.extend(sigma_1::Sigma1I0I1Columns::to_ids());
+        ids.extend(sigma_1::Sigma1O2Columns::to_ids());
+
+        ids
     }
 }
