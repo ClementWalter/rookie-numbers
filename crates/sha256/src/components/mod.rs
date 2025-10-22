@@ -2,8 +2,10 @@ use std::simd::u32x16;
 
 use stwo::{
     core::{
+        air::Component,
         channel::MerkleChannel,
         fields::{m31::BaseField, qm31::SecureField},
+        pcs::TreeVec,
         poly::circle::CanonicCoset,
         ColumnVec,
     },
@@ -195,6 +197,14 @@ impl Components {
         .collect();
 
         RelationSummary::summarize_relations(&entries).cleaned()
+    }
+
+    pub fn trace_log_degree_bounds(&self) -> Vec<TreeVec<ColumnVec<u32>>> {
+        let mut log_degree_bounds: Vec<TreeVec<ColumnVec<u32>>> = Vec::new();
+        log_degree_bounds.push(self.scheduling.trace_log_degree_bounds());
+        log_degree_bounds.push(self.compression.trace_log_degree_bounds());
+        log_degree_bounds.extend(self.preprocessed.trace_log_degree_bounds());
+        log_degree_bounds
     }
 }
 

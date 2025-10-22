@@ -20,7 +20,7 @@ use stwo::{
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
 };
 use stwo_constraint_framework::TraceLocationAllocator;
-use tracing::{info, span, Level};
+use tracing::{span, Level};
 
 use crate::{
     components::{gen_interaction_trace, gen_trace},
@@ -85,11 +85,20 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     let components =
         components::Components::new(log_size, trace_allocator, &relations, &claimed_sum);
 
+    #[cfg(debug_assertions)]
+    println!(
+        "Trace log degree bounds: {:?}",
+        components.trace_log_degree_bounds()
+    );
+
     if claimed_sum.scheduling + claimed_sum.compression + claimed_sum.preprocessed.sum()
         != SecureField::zero()
     {
-        let relation_summary = components.track_relations(&commitment_scheme);
-        info!("Relation summary: {:?}", relation_summary);
+        #[cfg(debug_assertions)]
+        tracing::info!(
+            "Relation summary: {:?}",
+            components.track_relations(&commitment_scheme)
+        );
         panic!("Relation summary is not zero");
     }
 

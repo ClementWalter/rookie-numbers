@@ -331,7 +331,8 @@ macro_rules! components {
             core::{fields::{m31::BaseField}, ColumnVec},
             prover::{backend::simd::{SimdBackend}, poly::{circle::CircleEvaluation, BitReversedOrder}, ComponentProver},
         };
-        use stwo::core::pcs::{TreeVec};
+        use stwo::core::pcs::TreeVec;
+        use stwo::core::air::Component;
         use stwo_constraint_framework::{
             relation_tracker::{add_to_relation_entries, RelationTrackerEntry},
             TraceLocationAllocator,
@@ -450,6 +451,12 @@ macro_rules! components {
                         $( add_to_relation_entries(&self.[<$module _ $name>], trace) ),+
                     )
                     .collect()
+                }
+
+                pub fn trace_log_degree_bounds(&self) -> Vec<TreeVec<ColumnVec<u32>>> {
+                    vec![
+                        $( self.[<$module _ $name>].trace_log_degree_bounds(), )+
+                    ]
                 }
             }
         }
