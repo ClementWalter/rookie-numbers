@@ -1,5 +1,5 @@
 [package]
-name = "vm"
+name = "rookie"
 version.workspace = true
 edition.workspace = true
 
@@ -16,16 +16,17 @@ serde.workspace = true
 serde_json.workspace = true
 bincode.workspace = true
 rayon.workspace = true
+utils.workspace = true
 
 [dev-dependencies]
-divan = "0.1.21"
+divan.workspace = true
 peak_alloc.workspace = true
 test-log.workspace = true
 
 [[bench]]
-name = "example"
+name = "frequency"
 harness = false
 
 [features]
 parallel = ["stwo/parallel", "stwo-constraint-framework/parallel"]
-default = ["parallel"]
+default = []

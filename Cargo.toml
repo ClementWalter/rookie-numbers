@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/vm", "crates/sha256"]
+members = ["crates/rookie", "crates/sha256", "crates/utils"]
 resolver = "2"
 
 [workspace.package]
@@ -36,6 +36,8 @@ blake2 = { version = "0.10.6", default-features = false }
 blake3 = { version = "1.5.0", default-features = false }
 educe = "0.5.0"
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+utils = { path = "crates/utils" }
+divan = "0.1.21"
 
 [profile.test]
 overflow-checks = false

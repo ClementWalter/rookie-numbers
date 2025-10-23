@@ -22,15 +22,13 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
+use utils::{combine, consume_col, consume_pair};
 
 use crate::{
-    combine,
     components::{
-        combine_w,
         compression::columns::{RoundColumns, RoundInteractionColumns},
         W_SIZE,
     },
-    consume_col, consume_pair,
     partitions::{pext_u32x16, BigSigma0, BigSigma1},
     relations::Relations,
     sha256::{
@@ -650,142 +648,129 @@ pub fn gen_interaction_trace(
         // BIG_SIGMA1
         let big_sigma_1_i0 = combine!(
             relations.big_sigma_1.i0,
-            e_i0_low,
-            e_i0_high,
-            sigma_1_o0_low,
-            sigma_1_o0_high,
-            sigma_1_o20_pext
+            [
+                e_i0_low,
+                e_i0_high,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext,
+            ]
         );
         let big_sigma_1_i1 = combine!(
             relations.big_sigma_1.i1,
-            e_i1_low,
-            e_i1_high,
-            sigma_1_o1_low,
-            sigma_1_o1_high,
-            sigma_1_o21_pext
+            [
+                e_i1_low,
+                e_i1_high,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext,
+            ]
         );
         let big_sigma_1_o2 = combine!(
             relations.big_sigma_1.o2,
-            sigma_1_o20_pext,
-            sigma_1_o21_pext,
-            sigma_1_o2_low,
-            sigma_1_o2_high
+            [
+                sigma_1_o20_pext,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high,
+            ]
         );
         // CH_LEFT
-        let ch_left_i0_low = combine!(relations.ch_left.i0_low, e_i0_low, f_i0_low, ch_left_i0_low);
+        let ch_left_i0_low = combine!(
+            relations.ch_left.i0_low,
+            [e_i0_low, f_i0_low, ch_left_i0_low]
+        );
         let ch_left_i0_high = combine!(
             relations.ch_left.i0_high,
-            e_i0_high,
-            f_i0_high,
-            ch_left_i0_high,
+            [e_i0_high, f_i0_high, ch_left_i0_high]
         );
-        let ch_left_i1_low =
-            combine!(relations.ch_left.i1_low, e_i1_low, f_i1_low, ch_left_i1_low,);
+        let ch_left_i1_low = combine!(
+            relations.ch_left.i1_low,
+            [e_i1_low, f_i1_low, ch_left_i1_low]
+        );
         let ch_left_i1_high = combine!(
             relations.ch_left.i1_high,
-            e_i1_high,
-            f_i1_high,
-            ch_left_i1_high,
+            [e_i1_high, f_i1_high, ch_left_i1_high]
         );
         // CH_RIGHT
         let ch_right_i0_low = combine!(
             relations.ch_right.i0_low,
-            e_i0_low,
-            g_i0_low,
-            ch_right_i0_low,
+            [e_i0_low, g_i0_low, ch_right_i0_low]
         );
         let ch_right_i0_high = combine!(
             relations.ch_right.i0_high,
-            e_i0_high,
-            g_i0_high,
-            ch_right_i0_high,
+            [e_i0_high, g_i0_high, ch_right_i0_high]
         );
         let ch_right_i1_low = combine!(
             relations.ch_right.i1_low,
-            e_i1_low,
-            g_i1_low,
-            ch_right_i1_low,
+            [e_i1_low, g_i1_low, ch_right_i1_low]
         );
         let ch_right_i1_high = combine!(
             relations.ch_right.i1_high,
-            e_i1_high,
-            g_i1_high,
-            ch_right_i1_high,
+            [e_i1_high, g_i1_high, ch_right_i1_high]
         );
         // BIG SIGMA0
         let big_sigma_0_i0 = combine!(
             relations.big_sigma_0.i0,
-            a_i0_low,
-            a_i0_high_0,
-            a_i0_high_1,
-            sigma_0_o0_low,
-            sigma_0_o0_high,
-            sigma_0_o20_pext,
+            [
+                a_i0_low,
+                a_i0_high_0,
+                a_i0_high_1,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext,
+            ]
         );
         let big_sigma_0_i1 = combine!(
             relations.big_sigma_0.i1,
-            a_i1_low_0,
-            a_i1_low_1,
-            a_i1_high,
-            sigma_0_o1_low,
-            sigma_0_o1_high,
-            sigma_0_o21_pext,
+            [
+                a_i1_low_0,
+                a_i1_low_1,
+                a_i1_high,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext,
+            ]
         );
         let big_sigma_0_o2 = combine!(
             relations.big_sigma_0.o2,
-            sigma_0_o20_pext,
-            sigma_0_o21_pext,
-            sigma_0_o2_low,
-            sigma_0_o2_high,
+            [
+                sigma_0_o20_pext,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high,
+            ]
         );
         // MAJ
         let maj_i0_low = combine!(
             relations.maj.i0_low,
-            a_i0_low,
-            b_i0_low,
-            c_i0_low,
-            maj_i0_low,
+            [a_i0_low, b_i0_low, c_i0_low, maj_i0_low]
         );
         let maj_i0_high_0 = combine!(
             relations.maj.i0_high_0,
-            a_i0_high_0,
-            b_i0_high_0,
-            c_i0_high_0,
-            maj_i0_high_0,
+            [a_i0_high_0, b_i0_high_0, c_i0_high_0, maj_i0_high_0]
         );
         let maj_i0_high_1 = combine!(
             relations.maj.i0_high_1,
-            a_i0_high_1,
-            b_i0_high_1,
-            c_i0_high_1,
-            maj_i0_high_1,
+            [a_i0_high_1, b_i0_high_1, c_i0_high_1, maj_i0_high_1]
         );
         let maj_i1_low_0 = combine!(
             relations.maj.i1_low_0,
-            a_i1_low_0,
-            b_i1_low_0,
-            c_i1_low_0,
-            maj_i1_low_0,
+            [a_i1_low_0, b_i1_low_0, c_i1_low_0, maj_i1_low_0]
         );
         let maj_i1_low_1 = combine!(
             relations.maj.i1_low_1,
-            a_i1_low_1,
-            b_i1_low_1,
-            c_i1_low_1,
-            maj_i1_low_1,
+            [a_i1_low_1, b_i1_low_1, c_i1_low_1, maj_i1_low_1]
         );
         let maj_i1_high = combine!(
             relations.maj.i1_high,
-            a_i1_high,
-            b_i1_high,
-            c_i1_high,
-            maj_i1_high,
+            [a_i1_high, b_i1_high, c_i1_high, maj_i1_high]
         );
         // ADD
-        let e_carry_low = combine!(relations.range_check_add.add_7, new_e_low, e_carry_low,);
-        let e_carry_high = combine!(relations.range_check_add.add_7, new_e_high, e_carry_high,);
-        let a_carry_low = combine!(relations.range_check_add.add_8, new_a_low, a_carry_low,);
-        let a_carry_high = combine!(relations.range_check_add.add_8, new_a_high, a_carry_high,);
+        let e_carry_low = combine!(relations.range_check_add.add_7, [new_e_low, e_carry_low]);
+        let e_carry_high = combine!(relations.range_check_add.add_7, [new_e_high, e_carry_high]);
+        let a_carry_low = combine!(relations.range_check_add.add_8, [new_a_low, a_carry_low]);
+        let a_carry_high = combine!(relations.range_check_add.add_8, [new_a_high, a_carry_high]);
 
         consume_pair!(
             interaction_trace;
@@ -817,7 +802,8 @@ pub fn gen_interaction_trace(
     }
 
     // Consume W emitted by scheduling
-    consume_col!(combine_w(relations, lookup_data), interaction_trace);
+    let w = combine!(relations.w, &lookup_data[..W_SIZE]);
+    consume_col!(w, interaction_trace);
 
     interaction_trace.finalize_last()
 }

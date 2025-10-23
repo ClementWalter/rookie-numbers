@@ -1,4 +1,4 @@
-use crate::trace_columns;
+use utils::trace_columns;
 
 trace_columns!(
     RoundColumns,

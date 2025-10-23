@@ -1,9 +1,9 @@
 use num_traits::One;
 use stwo::core::fields::m31::M31;
 use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval};
+use utils::add_to_relation;
 
 use crate::{
-    add_to_relation,
     components::{scheduling::columns::RoundColumnsOwned, W_SIZE},
     relations::Relations,
     sha256::N_SCHEDULING_ROUNDS,

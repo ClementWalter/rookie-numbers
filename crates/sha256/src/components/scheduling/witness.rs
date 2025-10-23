@@ -16,15 +16,13 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
+use utils::{combine, consume_pair, emit_col, simd::generate_simd_sequence_bulk};
 
 use crate::{
-    combine,
     components::{
-        combine_w,
         scheduling::columns::{RoundColumns, RoundInteractionColumns},
         W_SIZE,
     },
-    consume_pair, emit_col,
     partitions::{pext_u32x16, Sigma0, Sigma1},
     relations::Relations,
     sha256::{small_sigma_0_u32x16, small_sigma_1_u32x16, CHUNK_SIZE, N_SCHEDULING_ROUNDS},
@@ -32,20 +30,6 @@ use crate::{
 
 const N_COLUMNS: usize = W_SIZE + RoundColumns::SIZE * N_SCHEDULING_ROUNDS;
 const N_INTERACTION_COLUMNS: usize = W_SIZE + RoundInteractionColumns::SIZE * N_SCHEDULING_ROUNDS;
-
-#[inline]
-fn generate_simd_sequence_bulk(start: usize, len: usize) -> Vec<u32x16> {
-    assert!(len.is_multiple_of(16));
-    let n = len / 16;
-    let base = start as u32;
-
-    (0..n)
-        .map(|k| {
-            let b = base + (k as u32) * 16;
-            u32x16::from_array(core::array::from_fn(|i| (b + i as u32) & 0xffff))
-        })
-        .collect()
-}
 
 #[allow(clippy::type_complexity)]
 pub fn gen_trace(
@@ -293,67 +277,79 @@ pub fn gen_interaction_trace(
         // SIGMA 0
         let sigma_0_i0 = combine!(
             relations.sigma_0.i0,
-            w_15_i0_low,
-            w_15_i0_high,
-            sigma_0_o0_low,
-            sigma_0_o0_high,
-            sigma_0_o20_pext
+            [
+                w_15_i0_low,
+                w_15_i0_high,
+                sigma_0_o0_low,
+                sigma_0_o0_high,
+                sigma_0_o20_pext
+            ]
         );
         let sigma_0_i1 = combine!(
             relations.sigma_0.i1,
-            w_15_i1_low,
-            w_15_i1_high,
-            sigma_0_o1_low,
-            sigma_0_o1_high,
-            sigma_0_o21_pext
+            [
+                w_15_i1_low,
+                w_15_i1_high,
+                sigma_0_o1_low,
+                sigma_0_o1_high,
+                sigma_0_o21_pext
+            ]
         );
         let sigma_0_o2 = combine!(
             relations.sigma_0.o2,
-            sigma_0_o20_pext,
-            sigma_0_o21_pext,
-            sigma_0_o2_low,
-            sigma_0_o2_high
+            [
+                sigma_0_o20_pext,
+                sigma_0_o21_pext,
+                sigma_0_o2_low,
+                sigma_0_o2_high
+            ]
         );
         // SIGMA 1
         let sigma_1_i0 = combine!(
             relations.sigma_1.i0,
-            w_2_i0_low,
-            w_2_i0_high,
-            sigma_1_o0_low,
-            sigma_1_o0_high,
-            sigma_1_o20_pext
+            [
+                w_2_i0_low,
+                w_2_i0_high,
+                sigma_1_o0_low,
+                sigma_1_o0_high,
+                sigma_1_o20_pext
+            ]
         );
         let sigma_1_i1 = combine!(
             relations.sigma_1.i1,
-            w_2_i1_low,
-            w_2_i1_high,
-            sigma_1_o1_low,
-            sigma_1_o1_high,
-            sigma_1_o21_pext
+            [
+                w_2_i1_low,
+                w_2_i1_high,
+                sigma_1_o1_low,
+                sigma_1_o1_high,
+                sigma_1_o21_pext
+            ]
         );
         let sigma_1_o2 = combine!(
             relations.sigma_1.o2,
-            sigma_1_o20_pext,
-            sigma_1_o21_pext,
-            sigma_1_o2_low,
-            sigma_1_o2_high
+            [
+                sigma_1_o20_pext,
+                sigma_1_o21_pext,
+                sigma_1_o2_low,
+                sigma_1_o2_high
+            ]
         );
         // ADD
-        let carry_low = combine!(relations.range_check_add.add_4, new_w_low, carry_low,);
-        let carry_high = combine!(relations.range_check_add.add_4, new_w_high, carry_high);
+        let carry_low = combine!(relations.range_check_add.add_4, [new_w_low, carry_low]);
+        let carry_high = combine!(relations.range_check_add.add_4, [new_w_high, carry_high]);
 
         consume_pair!(
             interaction_trace;
             sigma_0_i0, sigma_0_i1,
-
-
-            sigma_0_o2, sigma_1_i0, sigma_1_i1, sigma_1_o2, carry_low,
-            carry_high,
+            sigma_0_o2, sigma_1_i0,
+            sigma_1_i1, sigma_1_o2,
+            carry_low, carry_high,
         );
     }
 
     // Emit W consumed by compression
-    emit_col!(combine_w(relations, lookup_data), interaction_trace);
+    let w = combine!(relations.w, &lookup_data[..W_SIZE]);
+    emit_col!(w, interaction_trace);
 
     interaction_trace.finalize_last()
 }
@@ -364,16 +360,6 @@ mod tests {
 
     use super::*;
     use crate::sha256::{small_sigma_0, small_sigma_1};
-
-    #[test]
-    fn test_generate_simd_sequence_bulk() {
-        let sequence = generate_simd_sequence_bulk(0, 1 << LOG_N_LANES);
-        assert_eq!(sequence.len(), 1);
-        assert_eq!(
-            sequence[0],
-            u32x16::from_array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
-        );
-    }
 
     #[test]
     fn test_gen_trace_columns_count() {

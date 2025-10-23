@@ -207,32 +207,3 @@ impl Components {
         log_degree_bounds
     }
 }
-
-#[inline(always)]
-pub fn combine_w(
-    relations: &Relations,
-    data: &[Vec<u32x16>],
-) -> Vec<stwo::prover::backend::simd::qm31::PackedQM31> {
-    use stwo_constraint_framework::Relation;
-
-    use crate::components::W_SIZE;
-
-    let simd_size = data[0].len();
-    let mut combined = Vec::with_capacity(simd_size);
-    for vec_row in 0..simd_size {
-        unsafe {
-            let values: [stwo::prover::backend::simd::m31::PackedM31; W_SIZE] = (0..W_SIZE)
-                .map(|i| {
-                    stwo::prover::backend::simd::m31::PackedM31::from_simd_unchecked(
-                        data[i][vec_row],
-                    )
-                })
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-            let denom: stwo::prover::backend::simd::qm31::PackedQM31 = relations.w.combine(&values);
-            combined.push(denom);
-        }
-    }
-    combined
-}

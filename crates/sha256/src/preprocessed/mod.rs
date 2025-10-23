@@ -10,8 +10,7 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-
-use crate::circle_evaluation_u32x16;
+use utils::circle_evaluation_u32x16;
 
 pub mod big_sigma_0;
 pub mod big_sigma_1;
@@ -26,50 +25,17 @@ pub struct PreProcessedTrace;
 
 impl PreProcessedTrace {
     pub fn gen_trace(&self) -> Vec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
-        let mut traces = vec![];
-
-        traces.extend(
-            big_sigma_0::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            big_sigma_1::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            ch_left::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            ch_right::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            maj::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            range_check_add::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            sigma_0::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-        traces.extend(
-            sigma_1::gen_column_simd()
-                .into_iter()
-                .map(|c| circle_evaluation_u32x16!(c)),
-        );
-
-        traces
+        big_sigma_0::gen_column_simd()
+            .into_iter()
+            .chain(big_sigma_1::gen_column_simd())
+            .chain(ch_left::gen_column_simd())
+            .chain(ch_right::gen_column_simd())
+            .chain(maj::gen_column_simd())
+            .chain(range_check_add::gen_column_simd())
+            .chain(sigma_0::gen_column_simd())
+            .chain(sigma_1::gen_column_simd())
+            .map(|c| circle_evaluation_u32x16!(c))
+            .collect()
     }
 
     pub fn ids(&self) -> Vec<PreProcessedColumnId> {

@@ -2,8 +2,7 @@ use std::simd::u32x16;
 
 use stwo::core::channel::Channel;
 use stwo_constraint_framework::relation;
-
-use crate::trace_columns;
+use utils::trace_columns;
 
 // [value, carry]
 const N_COLUMNS: usize = 2;

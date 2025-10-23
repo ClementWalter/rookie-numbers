@@ -3,11 +3,11 @@ use std::simd::u32x16;
 use itertools::{iproduct, Itertools};
 use stwo::core::channel::Channel;
 use stwo_constraint_framework::relation;
+use utils::trace_columns;
 
 use crate::{
     partitions::{pext_u32x16, BigSigma1 as BigSigma1Partitions, SubsetIterator},
     sha256::big_sigma_1_u32x16,
-    trace_columns,
 };
 
 const N_IO_COLUMNS: usize = 5;

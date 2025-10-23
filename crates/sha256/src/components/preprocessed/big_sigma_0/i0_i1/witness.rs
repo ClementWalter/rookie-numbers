@@ -16,9 +16,9 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
+use utils::{combine, simd_vec, write_pair};
 
 use crate::{
-    combine,
     components::{
         compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
         preprocessed::big_sigma_0::i0_i1::columns::ComponentColumns, W_SIZE,
@@ -27,7 +27,6 @@ use crate::{
     preprocessed::big_sigma_0::{self, BigSigma0Columns},
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
-    simd_vec, write_pair,
 };
 
 pub fn gen_trace(
@@ -105,21 +104,11 @@ pub fn gen_interaction_trace(
 
     let i0 = combine!(
         relations.big_sigma_0.i0,
-        i0_low,
-        i0_high_0,
-        i0_high_1,
-        o0_low,
-        o0_high,
-        o20_pext
+        [i0_low, i0_high_0, i0_high_1, o0_low, o0_high, o20_pext]
     );
     let i1 = combine!(
         relations.big_sigma_0.i1,
-        i1_low_0,
-        i1_low_1,
-        i1_high,
-        o1_low,
-        o1_high,
-        o21_pext
+        [i1_low_0, i1_low_1, i1_high, o1_low, o1_high, o21_pext]
     );
 
     write_pair!(

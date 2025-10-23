@@ -1,7 +1,7 @@
 use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval};
+use utils::add_to_relation;
 
 use crate::{
-    add_to_relation,
     components::preprocessed::maj::i0h0_i1l0::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma0 as BigSigma0Partitions,
     preprocessed::maj::MajI0H0I1L0ColumnsOwned as MajI0H0I1L0Columns, relations::Relations,
@@ -76,10 +76,10 @@ mod tests {
         prover::backend::simd::m31::LOG_N_LANES,
     };
     use stwo_constraint_framework::assert_constraints_on_polys;
+    use utils::circle_evaluation_u32x16;
 
     use super::*;
     use crate::{
-        circle_evaluation_u32x16,
         components::{
             compression::witness::gen_trace as gen_compression_trace,
             preprocessed::maj::i0h0_i1l0::witness::{gen_interaction_trace, gen_trace},
