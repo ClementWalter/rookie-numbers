@@ -79,13 +79,16 @@ macro_rules! trace_columns {
         impl $name<'static, ()> {
             pub const SIZE: usize = <[()]>::len(&[$(trace_columns!(@unit $column)),*]);
 
-            pub fn to_ids() -> Vec<
+            pub fn to_ids(suffix: Option<usize>) -> Vec<
                 stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId
             > {
                 vec![
                     $(
                         stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId {
-                            id: format!("{}_{}", stringify!($name), stringify!($column)),
+                            id: match suffix {
+                                Some(suffix) => format!("{}_{}_{}", stringify!($name), stringify!($column), suffix.to_string()),
+                                None => format!("{}_{}", stringify!($name), stringify!($column)),
+                            },
                         }
                     ),*
                 ]

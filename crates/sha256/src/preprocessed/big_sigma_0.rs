@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn test_ids() {
         assert_eq!(
-            BigSigma0Columns::to_ids().len(),
+            BigSigma0Columns::to_ids(None).len(),
             BigSigma0I0I1Columns::SIZE + BigSigma0O2Columns::SIZE
         );
     }

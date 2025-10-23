@@ -177,8 +177,11 @@ mod tests {
 
     #[test]
     fn test_ids() {
-        assert_eq!(Sigma0I0I1Columns::to_ids().len(), Sigma0I0I1Columns::SIZE);
-        assert_eq!(Sigma0O2Columns::to_ids().len(), Sigma0O2Columns::SIZE);
+        assert_eq!(
+            Sigma0I0I1Columns::to_ids(None).len(),
+            Sigma0I0I1Columns::SIZE
+        );
+        assert_eq!(Sigma0O2Columns::to_ids(None).len(), Sigma0O2Columns::SIZE);
     }
 
     #[test]

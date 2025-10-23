@@ -41,23 +41,23 @@ impl PreProcessedTrace {
     pub fn ids(&self) -> Vec<PreProcessedColumnId> {
         let mut ids = vec![];
 
-        ids.extend(big_sigma_0::BigSigma0I0I1Columns::to_ids());
-        ids.extend(big_sigma_0::BigSigma0O2Columns::to_ids());
-        ids.extend(big_sigma_1::BigSigma1I0Columns::to_ids());
-        ids.extend(big_sigma_1::BigSigma1I1Columns::to_ids());
-        ids.extend(big_sigma_1::BigSigma1O2Columns::to_ids());
-        ids.extend(ch_left::ChLeftI0Columns::to_ids());
-        ids.extend(ch_left::ChLeftI1Columns::to_ids());
-        ids.extend(ch_right::ChRightI0Columns::to_ids());
-        ids.extend(ch_right::ChRightI1Columns::to_ids());
-        ids.extend(maj::MajI0LI1HColumns::to_ids());
-        ids.extend(maj::MajI0H0I1L0Columns::to_ids());
-        ids.extend(maj::MajI0H1I1L1Columns::to_ids());
-        ids.extend(range_check_add::RangeCheckAddColumns::to_ids());
-        ids.extend(sigma_0::Sigma0I0I1Columns::to_ids());
-        ids.extend(sigma_0::Sigma0O2Columns::to_ids());
-        ids.extend(sigma_1::Sigma1I0I1Columns::to_ids());
-        ids.extend(sigma_1::Sigma1O2Columns::to_ids());
+        ids.extend(big_sigma_0::BigSigma0I0I1Columns::to_ids(None));
+        ids.extend(big_sigma_0::BigSigma0O2Columns::to_ids(None));
+        ids.extend(big_sigma_1::BigSigma1I0Columns::to_ids(None));
+        ids.extend(big_sigma_1::BigSigma1I1Columns::to_ids(None));
+        ids.extend(big_sigma_1::BigSigma1O2Columns::to_ids(None));
+        ids.extend(ch_left::ChLeftI0Columns::to_ids(None));
+        ids.extend(ch_left::ChLeftI1Columns::to_ids(None));
+        ids.extend(ch_right::ChRightI0Columns::to_ids(None));
+        ids.extend(ch_right::ChRightI1Columns::to_ids(None));
+        ids.extend(maj::MajI0LI1HColumns::to_ids(None));
+        ids.extend(maj::MajI0H0I1L0Columns::to_ids(None));
+        ids.extend(maj::MajI0H1I1L1Columns::to_ids(None));
+        ids.extend(range_check_add::RangeCheckAddColumns::to_ids(None));
+        ids.extend(sigma_0::Sigma0I0I1Columns::to_ids(None));
+        ids.extend(sigma_0::Sigma0O2Columns::to_ids(None));
+        ids.extend(sigma_1::Sigma1I0I1Columns::to_ids(None));
+        ids.extend(sigma_1::Sigma1O2Columns::to_ids(None));
 
         ids
     }
