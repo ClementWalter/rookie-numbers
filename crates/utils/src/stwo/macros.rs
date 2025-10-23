@@ -71,18 +71,6 @@ macro_rules! trace_columns {
             #[allow(dead_code)]
             impl [<$name Owned>]<()> {
                 pub const SIZE: usize = <[()]>::len(&[$(trace_columns!(@unit $column)),*]);
-
-                pub fn to_ids() -> Vec<
-                    stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId
-                > {
-                    vec![
-                        $(
-                            stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId {
-                                id: format!("{}_{}", stringify!($name), stringify!($column)),
-                            }
-                        ),*
-                    ]
-                }
             }
         }
 
