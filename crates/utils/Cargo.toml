@@ -2,3 +2,11 @@
 name = "utils"
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+bytemuck.workspace = true
+divan.workspace = true
+
+[[bench]]
+name = "aligned_vec"
+harness = false

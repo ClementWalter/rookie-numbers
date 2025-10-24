@@ -136,40 +136,40 @@ mod tests {
         let columns = gen_column_simd();
 
         // Helper to flatten Vec<u32x16> into Vec<u32>
-        fn flatten_simd_column(col: &[u32x16]) -> Vec<u32> {
+        fn flatten_simd(col: &[u32x16]) -> Vec<u32> {
             col.iter()
                 .flat_map(|v| v.as_array().iter().copied())
                 .collect()
         }
 
         let mut lookup_i0_low: HashMap<(u32, u32), u32> = HashMap::new();
-        let i0_low_e = flatten_simd_column(&columns[0]);
-        let i0_low_g = flatten_simd_column(&columns[1]);
-        let i0_low_res = flatten_simd_column(&columns[2]);
+        let i0_low_e = flatten_simd(&columns[0]);
+        let i0_low_g = flatten_simd(&columns[1]);
+        let i0_low_res = flatten_simd(&columns[2]);
         for ((e, f), res) in i0_low_e.iter().zip(&i0_low_g).zip(&i0_low_res) {
             lookup_i0_low.insert((*e, *f), *res);
         }
 
         let mut lookup_i0_high: HashMap<(u32, u32), u32> = HashMap::new();
-        let i0_high_e = flatten_simd_column(&columns[3]);
-        let i0_high_g = flatten_simd_column(&columns[4]);
-        let i0_high_res = flatten_simd_column(&columns[5]);
+        let i0_high_e = flatten_simd(&columns[3]);
+        let i0_high_g = flatten_simd(&columns[4]);
+        let i0_high_res = flatten_simd(&columns[5]);
         for ((e, f), res) in i0_high_e.iter().zip(&i0_high_g).zip(&i0_high_res) {
             lookup_i0_high.insert((*e, *f), *res);
         }
 
         let mut lookup_i1_low: HashMap<(u32, u32), u32> = HashMap::new();
-        let i1_low_e = flatten_simd_column(&columns[6]);
-        let i1_low_g = flatten_simd_column(&columns[7]);
-        let i1_low_res = flatten_simd_column(&columns[8]);
+        let i1_low_e = flatten_simd(&columns[6]);
+        let i1_low_g = flatten_simd(&columns[7]);
+        let i1_low_res = flatten_simd(&columns[8]);
         for ((e, f), res) in i1_low_e.iter().zip(&i1_low_g).zip(&i1_low_res) {
             lookup_i1_low.insert((*e, *f), *res);
         }
 
         let mut lookup_i1_high: HashMap<(u32, u32), u32> = HashMap::new();
-        let i1_high_e = flatten_simd_column(&columns[9]);
-        let i1_high_g = flatten_simd_column(&columns[10]);
-        let i1_high_res = flatten_simd_column(&columns[11]);
+        let i1_high_e = flatten_simd(&columns[9]);
+        let i1_high_g = flatten_simd(&columns[10]);
+        let i1_high_res = flatten_simd(&columns[11]);
         for ((e, f), res) in i1_high_e.iter().zip(&i1_high_g).zip(&i1_high_res) {
             lookup_i1_high.insert((*e, *f), *res);
         }

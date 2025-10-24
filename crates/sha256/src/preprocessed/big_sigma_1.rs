@@ -193,37 +193,37 @@ mod tests {
         let columns = gen_column_simd();
 
         // Helper to flatten Vec<u32x16> into Vec<u32>
-        fn flatten_simd_column(col: &[u32x16]) -> Vec<u32> {
+        fn flatten_simd(col: &[u32x16]) -> Vec<u32> {
             col.iter()
                 .flat_map(|v| v.as_array().iter().copied())
                 .collect()
         }
 
         let mut lookup_i0: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
-        let i0_0 = flatten_simd_column(&columns[0]);
-        let i0_1 = flatten_simd_column(&columns[1]);
-        let i0_2 = flatten_simd_column(&columns[2]);
-        let i0_3 = flatten_simd_column(&columns[3]);
-        let i0_4 = flatten_simd_column(&columns[4]);
+        let i0_0 = flatten_simd(&columns[0]);
+        let i0_1 = flatten_simd(&columns[1]);
+        let i0_2 = flatten_simd(&columns[2]);
+        let i0_3 = flatten_simd(&columns[3]);
+        let i0_4 = flatten_simd(&columns[4]);
         for ((((&a, &b), &c), &d), &e) in i0_0.iter().zip(&i0_1).zip(&i0_2).zip(&i0_3).zip(&i0_4) {
             lookup_i0.insert((a, b), (c, d, e));
         }
 
         let mut lookup_i1: HashMap<(u32, u32), (u32, u32, u32)> = HashMap::new();
-        let i1_0 = flatten_simd_column(&columns[5]);
-        let i1_1 = flatten_simd_column(&columns[6]);
-        let i1_2 = flatten_simd_column(&columns[7]);
-        let i1_3 = flatten_simd_column(&columns[8]);
-        let i1_4 = flatten_simd_column(&columns[9]);
+        let i1_0 = flatten_simd(&columns[5]);
+        let i1_1 = flatten_simd(&columns[6]);
+        let i1_2 = flatten_simd(&columns[7]);
+        let i1_3 = flatten_simd(&columns[8]);
+        let i1_4 = flatten_simd(&columns[9]);
         for ((((&a, &b), &c), &d), &e) in i1_0.iter().zip(&i1_1).zip(&i1_2).zip(&i1_3).zip(&i1_4) {
             lookup_i1.insert((a, b), (c, d, e));
         }
 
         let mut lookup_o2: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
-        let o2_0 = flatten_simd_column(&columns[10]);
-        let o2_1 = flatten_simd_column(&columns[11]);
-        let o2_2 = flatten_simd_column(&columns[12]);
-        let o2_3 = flatten_simd_column(&columns[13]);
+        let o2_0 = flatten_simd(&columns[10]);
+        let o2_1 = flatten_simd(&columns[11]);
+        let o2_2 = flatten_simd(&columns[12]);
+        let o2_3 = flatten_simd(&columns[13]);
         for (((&a, &b), &c), &d) in o2_0.iter().zip(&o2_1).zip(&o2_2).zip(&o2_3) {
             lookup_o2.insert((a, b), (c, d));
         }
