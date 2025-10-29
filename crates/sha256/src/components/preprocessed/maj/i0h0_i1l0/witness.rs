@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -16,12 +16,11 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{combine, simd_vec, write_pair};
+use utils::{aligned_vec, combine, simd::into_simd, write_pair};
 
 use crate::{
     components::{
-        compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
-        preprocessed::maj::i0h0_i1l0::columns::ComponentColumns, W_SIZE,
+        compression::columns::RoundInteractionColumns as CompressionInteractionColumns, W_SIZE,
     },
     partitions::{pext_u32x16, BigSigma0},
     preprocessed::maj::{self, MajColumns},
@@ -30,12 +29,13 @@ use crate::{
 };
 
 pub fn gen_trace(
+    log_size: u32,
     _scheduling_lookup_data: &[Vec<u32x16>],
     compression_lookup_data: &[Vec<u32x16>],
 ) -> Vec<Vec<u32x16>> {
     // Dense counters for each relation
-    let mut i0_high_0_mult = vec![0u32; 1 << (BigSigma0::I0_H0.count_ones() * 3)];
-    let mut i1_low_0_mult = vec![0u32; 1 << (BigSigma0::I1_L0.count_ones() * 3)];
+    let mut i0_high_0_mult = aligned_vec![0u32; 1 << (BigSigma0::I0_H0.count_ones() * 3)];
+    let mut i1_low_0_mult = aligned_vec![0u32; 1 << (BigSigma0::I1_L0.count_ones() * 3)];
 
     // Aggregate over all compression lookups
     for round in 0..N_COMPRESSION_ROUNDS {
@@ -75,7 +75,11 @@ pub fn gen_trace(
         );
     }
 
-    simd_vec!(i0_high_0_mult, i1_low_0_mult)
+    into_simd(&i0_high_0_mult)
+        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_low_0_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
+        .collect()
 }
 
 pub fn gen_interaction_trace(
@@ -99,31 +103,44 @@ pub fn gen_interaction_trace(
     } = MajColumns::from_slice(&preprocessed_columns[..]);
 
     let simd_size = trace[0].len();
-    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
+    let log_size = simd_size.ilog2() + LOG_N_LANES;
+    let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    let cols = ComponentColumns::from_slice(trace);
+    for (i, [i0_high_0_mult, i1_low_0_mult]) in trace.array_chunks::<2>().enumerate() {
+        let start = i * simd_size;
+        let end = start + simd_size;
 
-    let i0_high_0 = combine!(
-        relations.maj.i0_high_0,
-        [i0_high_0_a, i0_high_0_b, i0_high_0_c, i0_high_0_res]
-    );
-    let i1_low_0 = combine!(
-        relations.maj.i1_low_0,
-        [i1_low_0_a, i1_low_0_b, i1_low_0_c, i1_low_0_res]
-    );
-
-    write_pair!(
-        cols.i0_high_0_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i0_high_0,
-        cols.i1_low_0_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i1_low_0,
-        interaction_trace
-    );
+        let i0_high_0 = combine!(
+            relations.maj.i0_high_0,
+            [
+                &i0_high_0_a[start..end],
+                &i0_high_0_b[start..end],
+                &i0_high_0_c[start..end],
+                &i0_high_0_res[start..end]
+            ]
+        );
+        let i1_low_0 = combine!(
+            relations.maj.i1_low_0,
+            [
+                &i1_low_0_a[start..end],
+                &i1_low_0_b[start..end],
+                &i1_low_0_c[start..end],
+                &i1_low_0_res[start..end]
+            ]
+        );
+        write_pair!(
+            i0_high_0_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i0_high_0,
+            i1_low_0_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i1_low_0,
+            interaction_trace
+        );
+    }
     interaction_trace.finalize_last()
 }

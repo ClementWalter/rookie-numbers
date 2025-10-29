@@ -20,7 +20,7 @@ use stwo::{
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
 };
 use stwo_constraint_framework::TraceLocationAllocator;
-use tracing::{span, Level};
+use tracing::{info, span, Level};
 
 use crate::{
     components::{gen_interaction_trace, gen_trace},
@@ -46,11 +46,11 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     // Preprocessed trace.
     let span = span!(Level::INFO, "Constant").entered();
     let span_1 = span!(Level::INFO, "Simd generation").entered();
-    let trace = PreProcessedTrace.gen_trace();
+    let preprocessed_trace = PreProcessedTrace::new(log_size);
     span_1.exit();
     let span_2 = span!(Level::INFO, "Extend evals").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_evals(trace);
+    tree_builder.extend_evals(preprocessed_trace.trace);
     tree_builder.commit(channel);
     span_2.exit();
     span.exit();
@@ -78,10 +78,18 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     span_1.exit();
     span.exit();
 
+    info!(
+        "Columns count: {:?}",
+        commitment_scheme
+            .trees
+            .as_ref()
+            .map(|tree| tree.evaluations.len())
+    );
+
     // Prove constraints.
     let span = span!(Level::INFO, "Prove").entered();
     let trace_allocator =
-        &mut TraceLocationAllocator::new_with_preprocessed_columns(&PreProcessedTrace.ids());
+        &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids);
     let components =
         components::Components::new(log_size, trace_allocator, &relations, &claimed_sum);
 
@@ -133,7 +141,7 @@ mod tests {
 
         // Get from environment variable:
         let log_n_instances = env::var("LOG_N_INSTANCES")
-            .unwrap_or_else(|_| "4".to_string())
+            .unwrap_or_else(|_| "13".to_string())
             .parse::<u32>()
             .unwrap();
         let n_iter = env::var("N_ITER")

@@ -7,63 +7,61 @@ use crate::{
     preprocessed::maj::MajI0H0I1L0ColumnsOwned as MajI0H0I1L0Columns, relations::Relations,
 };
 
-const _: () = assert!(
-    BigSigma0Partitions::I0_H0.count_ones() == BigSigma0Partitions::I1_L0.count_ones(),
-    "BigSigma0Partitions::I0_H0 and I1_L0 must have the same number of ones"
-);
-
 pub type Component = FrameworkComponent<Eval>;
 
-fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations) {
-    let ComponentColumns {
-        i0_high_0_mult,
-        i1_low_0_mult,
-    } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
-    let MajI0H0I1L0Columns {
-        i0_high_0_a,
-        i0_high_0_b,
-        i0_high_0_c,
-        i0_high_0_res,
-        i1_low_0_a,
-        i1_low_0_b,
-        i1_low_0_c,
-        i1_low_0_res,
-    } = MajI0H0I1L0Columns::<<E as EvalAtRow>::F>::from_ids(eval);
-
-    add_to_relation!(
-        eval,
-        relations.maj.i0_high_0,
-        E::EF::from(i0_high_0_mult),
-        i0_high_0_a,
-        i0_high_0_b,
-        i0_high_0_c,
-        i0_high_0_res,
-    );
-    add_to_relation!(
-        eval,
-        relations.maj.i1_low_0,
-        E::EF::from(i1_low_0_mult),
-        i1_low_0_a,
-        i1_low_0_b,
-        i1_low_0_c,
-        i1_low_0_res,
-    );
+fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
+    let chunk_count = 1 << (BigSigma0Partitions::I0_H0.count_ones() * 3 - log_size);
+    for chunk in 0..chunk_count {
+        let ComponentColumns {
+            i0_high_0_mult,
+            i1_low_0_mult,
+        } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
+        let MajI0H0I1L0Columns {
+            i0_high_0_a,
+            i0_high_0_b,
+            i0_high_0_c,
+            i0_high_0_res,
+            i1_low_0_a,
+            i1_low_0_b,
+            i1_low_0_c,
+            i1_low_0_res,
+        } = MajI0H0I1L0Columns::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        add_to_relation!(
+            eval,
+            relations.maj.i0_high_0,
+            E::EF::from(i0_high_0_mult),
+            i0_high_0_a,
+            i0_high_0_b,
+            i0_high_0_c,
+            i0_high_0_res,
+        );
+        add_to_relation!(
+            eval,
+            relations.maj.i1_low_0,
+            E::EF::from(i1_low_0_mult),
+            i1_low_0_a,
+            i1_low_0_b,
+            i1_low_0_c,
+            i1_low_0_res,
+        );
+    }
     eval.finalize_logup_in_pairs();
 }
 
 #[derive(Clone)]
 pub struct Eval {
+    pub log_size: u32,
     pub relations: Relations,
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        BigSigma0Partitions::I0_H0.count_ones() * 3
+        self.log_size
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        BigSigma0Partitions::I0_H0.count_ones() * 3 + 1
+        self.log_size + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
-        eval_constraints(&mut eval, &self.relations);
+        eval_constraints(&mut eval, &self.relations, self.log_size);
         eval
     }
 }
@@ -85,7 +83,7 @@ mod tests {
             preprocessed::maj::i0h0_i1l0::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::maj,
+        preprocessed::maj::{self, MajI0H0I1L0Columns as MajI0H0I1L0ColumnsBorrowed},
     };
 
     #[test_log::test]
@@ -93,27 +91,45 @@ mod tests {
         const LOG_N_ROWS: u32 = 8;
 
         // Trace.
-        let maj_cols = maj::gen_column_simd();
-
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let trace = gen_trace(&scheduling_lookup_data, &compression_lookup_data);
+        let max_log_size = 21;
+        let trace = gen_trace(
+            max_log_size,
+            &scheduling_lookup_data,
+            &compression_lookup_data,
+        );
+
+        let simd_size = trace[0].len().ilog2();
+        let log_size = simd_size + LOG_N_LANES;
+
+        println!("simd_size: {simd_size}");
+        println!("log_size: {log_size}");
+        println!("BigSigma0Partitions::I0_H0: {}", BigSigma0Partitions::I0_H0);
+        println!(
+            "chunk_count: {}",
+            1 << (BigSigma0Partitions::I0_H0.count_ones() * 3 - log_size)
+        );
 
         let relations = Relations::dummy();
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
+        let maj_cols = maj::gen_column_simd();
+        let maj_i0h0_i1l0_cols = &maj_cols[8..16];
+        let preprocessed_trace = MajI0H0I1L0ColumnsBorrowed::from_slice(maj_i0h0_i1l0_cols)
+            .chunks((1 << simd_size) as usize)
+            .into_iter()
+            .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
+            .collect::<Vec<_>>();
+
         let traces = TreeVec::new(vec![
-            maj_cols[8..16]
-                .iter()
-                .map(|c| circle_evaluation_u32x16!(c))
-                .collect::<Vec<_>>(),
+            preprocessed_trace,
             trace
                 .into_iter()
                 .map(|c| circle_evaluation_u32x16!(c))
                 .collect::<Vec<_>>(),
             interaction_trace,
         ]);
-        let log_size = (traces[0][0].data.len() * (1 << LOG_N_LANES)).ilog2();
 
         let trace_polys =
             traces.map(|trace| trace.into_iter().map(|c| c.interpolate()).collect_vec());
@@ -122,7 +138,7 @@ mod tests {
             &trace_polys,
             CanonicCoset::new(log_size),
             |mut eval| {
-                eval_constraints(&mut eval, &relations);
+                eval_constraints(&mut eval, &relations, log_size);
             },
             claimed_sum,
         );

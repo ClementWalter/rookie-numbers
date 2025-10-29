@@ -16,12 +16,11 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{combine, simd_vec, write_col, write_pair};
+use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};
 
 use crate::{
     components::{
         compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
-        preprocessed::range_check_add::columns::ComponentColumns,
         scheduling::columns::RoundInteractionColumns as SchedulingInteractionColumns, W_SIZE,
     },
     preprocessed::range_check_add::{self, RangeCheckAddColumns},
@@ -30,13 +29,14 @@ use crate::{
 };
 
 pub fn gen_trace(
+    log_size: u32,
     scheduling_lookup_data: &[Vec<u32x16>],
     compression_lookup_data: &[Vec<u32x16>],
 ) -> Vec<Vec<u32x16>> {
     // Dense counters for each relation
-    let mut carry_4_mult = vec![0u32; 1 << 19];
-    let mut carry_7_mult = vec![0u32; 1 << 19];
-    let mut carry_8_mult = vec![0u32; 1 << 19];
+    let mut carry_4_mult = aligned_vec![0u32; 1 << 19];
+    let mut carry_7_mult = aligned_vec![0u32; 1 << 19];
+    let mut carry_8_mult = aligned_vec![0u32; 1 << 19];
 
     // Aggregate over all scheduling lookups
     for round in 0..N_SCHEDULING_ROUNDS {
@@ -92,7 +92,12 @@ pub fn gen_trace(
         });
     }
 
-    simd_vec!(carry_4_mult, carry_7_mult, carry_8_mult)
+    into_simd(&carry_4_mult)
+        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
+        .zip(into_simd(&carry_7_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .zip(into_simd(&carry_8_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .flat_map(|((c4, c7), c8)| [c4.to_vec(), c7.to_vec(), c8.to_vec()])
+        .collect()
 }
 
 pub fn gen_interaction_trace(
@@ -111,34 +116,47 @@ pub fn gen_interaction_trace(
     } = RangeCheckAddColumns::from_slice(&preprocessed_columns[..]);
 
     let simd_size = trace[0].len();
-    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
+    let log_size = simd_size.ilog2() + LOG_N_LANES;
+    let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    let cols = ComponentColumns::from_slice(trace);
+    for (i, [carry_4_mult, carry_7_mult, carry_8_mult]) in trace.array_chunks::<3>().enumerate() {
+        let start = i * simd_size;
+        let end = start + simd_size;
 
-    let carry_4 = combine!(relations.range_check_add.add_4, [value, carry_4]);
-    let carry_7 = combine!(relations.range_check_add.add_7, [value, carry_7]);
-    let carry_8 = combine!(relations.range_check_add.add_8, [value, carry_8]);
+        let carry_4_rel = combine!(
+            relations.range_check_add.add_4,
+            [&value[start..end], &carry_4[start..end]]
+        );
+        let carry_7_rel = combine!(
+            relations.range_check_add.add_7,
+            [&value[start..end], &carry_7[start..end]]
+        );
+        let carry_8_rel = combine!(
+            relations.range_check_add.add_8,
+            [&value[start..end], &carry_8[start..end]]
+        );
 
-    write_pair!(
-        cols.carry_4_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        carry_4,
-        cols.carry_7_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        carry_7,
-        interaction_trace
-    );
-    write_col!(
-        cols.carry_8_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        carry_8,
-        interaction_trace
-    );
+        write_pair!(
+            carry_4_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            carry_4_rel,
+            carry_7_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            carry_7_rel,
+            interaction_trace
+        );
+        write_col!(
+            carry_8_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            carry_8_rel,
+            interaction_trace
+        );
+    }
     interaction_trace.finalize_last()
 }

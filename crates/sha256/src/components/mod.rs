@@ -62,7 +62,7 @@ pub fn gen_trace(
 
     let span = span!(Level::INFO, "Preprocessed").entered();
     let preprocessed_trace =
-        preprocessed::gen_trace(&scheduling_lookup_data, &compression_lookup_data);
+        preprocessed::gen_trace(log_size, &scheduling_lookup_data, &compression_lookup_data);
     span.exit();
 
     let lookup_data = LookupData {
@@ -154,6 +154,7 @@ impl Components {
                 claimed_sum.compression,
             ),
             preprocessed: preprocessed::Components::new(
+                log_size,
                 location_allocator,
                 relations.clone(),
                 &claimed_sum.preprocessed,

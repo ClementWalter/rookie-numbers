@@ -40,12 +40,14 @@ macro_rules! components {
             }
 
             pub fn gen_trace(
+                log_size: u32,
                 scheduling_lookup_data: &[Vec<u32x16>],
                 compression_lookup_data: &[Vec<u32x16>],
             ) -> Traces {
                 Traces {
                     $(
                         [<$module _ $name>]: $module::$name::witness::gen_trace(
+                            log_size,
                             scheduling_lookup_data,
                             compression_lookup_data
                         ),
@@ -109,6 +111,7 @@ macro_rules! components {
 
             impl Components {
                 pub fn new(
+                    log_size: u32,
                     location_allocator: &mut TraceLocationAllocator,
                     relations: Relations,
                     claimed_sum: &ClaimedSum,
@@ -117,7 +120,7 @@ macro_rules! components {
                         $(
                             [<$module _ $name>]: $module::$name::air::Component::new(
                                 location_allocator,
-                                $module::$name::air::Eval { relations: relations.clone() },
+                                $module::$name::air::Eval { log_size, relations: relations.clone() },
                                 claimed_sum.[<$module _ $name>],
                             ),
                         )+
