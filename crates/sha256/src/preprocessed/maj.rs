@@ -187,62 +187,62 @@ mod tests {
         let columns = gen_column_simd();
 
         // Helper to flatten Vec<u32x16> into Vec<u32>
-        fn flatten_simd_column(col: &[u32x16]) -> Vec<u32> {
+        fn flatten_simd(col: &[u32x16]) -> Vec<u32> {
             col.iter()
                 .flat_map(|v| v.as_array().iter().copied())
                 .collect()
         }
 
         let mut lookup_i0_l: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i0_l_0 = flatten_simd_column(&columns[0]);
-        let i0_l_1 = flatten_simd_column(&columns[1]);
-        let i0_l_2 = flatten_simd_column(&columns[2]);
-        let i0_l_3 = flatten_simd_column(&columns[3]);
+        let i0_l_0 = flatten_simd(&columns[0]);
+        let i0_l_1 = flatten_simd(&columns[1]);
+        let i0_l_2 = flatten_simd(&columns[2]);
+        let i0_l_3 = flatten_simd(&columns[3]);
         for (((&a, &b), &c), &d) in i0_l_0.iter().zip(&i0_l_1).zip(&i0_l_2).zip(&i0_l_3) {
             lookup_i0_l.insert((a, b, c), d);
         }
 
         let mut lookup_i1_h: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i1_h_0 = flatten_simd_column(&columns[4]);
-        let i1_h_1 = flatten_simd_column(&columns[5]);
-        let i1_h_2 = flatten_simd_column(&columns[6]);
-        let i1_h_3 = flatten_simd_column(&columns[7]);
+        let i1_h_0 = flatten_simd(&columns[4]);
+        let i1_h_1 = flatten_simd(&columns[5]);
+        let i1_h_2 = flatten_simd(&columns[6]);
+        let i1_h_3 = flatten_simd(&columns[7]);
         for (((&a, &b), &c), &d) in i1_h_0.iter().zip(&i1_h_1).zip(&i1_h_2).zip(&i1_h_3) {
             lookup_i1_h.insert((a, b, c), d);
         }
 
         let mut lookup_i0_h_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i0_h_0_0 = flatten_simd_column(&columns[8]);
-        let i0_h_0_1 = flatten_simd_column(&columns[9]);
-        let i0_h_0_2 = flatten_simd_column(&columns[10]);
-        let i0_h_0_3 = flatten_simd_column(&columns[11]);
+        let i0_h_0_0 = flatten_simd(&columns[8]);
+        let i0_h_0_1 = flatten_simd(&columns[9]);
+        let i0_h_0_2 = flatten_simd(&columns[10]);
+        let i0_h_0_3 = flatten_simd(&columns[11]);
         for (((&a, &b), &c), &d) in i0_h_0_0.iter().zip(&i0_h_0_1).zip(&i0_h_0_2).zip(&i0_h_0_3) {
             lookup_i0_h_0.insert((a, b, c), d);
         }
 
         let mut lookup_i1_l_0: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i1_l_0_0 = flatten_simd_column(&columns[12]);
-        let i1_l_0_1 = flatten_simd_column(&columns[13]);
-        let i1_l_0_2 = flatten_simd_column(&columns[14]);
-        let i1_l_0_3 = flatten_simd_column(&columns[15]);
+        let i1_l_0_0 = flatten_simd(&columns[12]);
+        let i1_l_0_1 = flatten_simd(&columns[13]);
+        let i1_l_0_2 = flatten_simd(&columns[14]);
+        let i1_l_0_3 = flatten_simd(&columns[15]);
         for (((&a, &b), &c), &d) in i1_l_0_0.iter().zip(&i1_l_0_1).zip(&i1_l_0_2).zip(&i1_l_0_3) {
             lookup_i1_l_0.insert((a, b, c), d);
         }
 
         let mut lookup_i0_h_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i0_h_1_0 = flatten_simd_column(&columns[16]);
-        let i0_h_1_1 = flatten_simd_column(&columns[17]);
-        let i0_h_1_2 = flatten_simd_column(&columns[18]);
-        let i0_h_1_3 = flatten_simd_column(&columns[19]);
+        let i0_h_1_0 = flatten_simd(&columns[16]);
+        let i0_h_1_1 = flatten_simd(&columns[17]);
+        let i0_h_1_2 = flatten_simd(&columns[18]);
+        let i0_h_1_3 = flatten_simd(&columns[19]);
         for (((&a, &b), &c), &d) in i0_h_1_0.iter().zip(&i0_h_1_1).zip(&i0_h_1_2).zip(&i0_h_1_3) {
             lookup_i0_h_1.insert((a, b, c), d);
         }
 
         let mut lookup_i1_l_1: HashMap<(u32, u32, u32), u32> = HashMap::new();
-        let i1_l_1_0 = flatten_simd_column(&columns[20]);
-        let i1_l_1_1 = flatten_simd_column(&columns[21]);
-        let i1_l_1_2 = flatten_simd_column(&columns[22]);
-        let i1_l_1_3 = flatten_simd_column(&columns[23]);
+        let i1_l_1_0 = flatten_simd(&columns[20]);
+        let i1_l_1_1 = flatten_simd(&columns[21]);
+        let i1_l_1_2 = flatten_simd(&columns[22]);
+        let i1_l_1_3 = flatten_simd(&columns[23]);
         for (((&a, &b), &c), &d) in i1_l_1_0.iter().zip(&i1_l_1_1).zip(&i1_l_1_2).zip(&i1_l_1_3) {
             lookup_i1_l_1.insert((a, b, c), d);
         }

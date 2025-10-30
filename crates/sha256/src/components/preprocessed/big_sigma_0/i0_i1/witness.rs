@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -16,12 +16,11 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{combine, simd_vec, write_pair};
+use utils::{aligned_vec, combine, simd::into_simd, write_pair};
 
 use crate::{
     components::{
-        compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
-        preprocessed::big_sigma_0::i0_i1::columns::ComponentColumns, W_SIZE,
+        compression::columns::RoundInteractionColumns as CompressionInteractionColumns, W_SIZE,
     },
     partitions::{pext_u32x16, BigSigma0},
     preprocessed::big_sigma_0::{self, BigSigma0Columns},
@@ -30,12 +29,13 @@ use crate::{
 };
 
 pub fn gen_trace(
+    log_size: u32,
     _scheduling_lookup_data: &[Vec<u32x16>],
     compression_lookup_data: &[Vec<u32x16>],
 ) -> Vec<Vec<u32x16>> {
     // Dense counters for each relation
-    let mut i0_mult = vec![0u32; 1 << BigSigma0::I0.count_ones()];
-    let mut i1_mult = vec![0u32; 1 << BigSigma0::I1.count_ones()];
+    let mut i0_mult = aligned_vec![0u32; 1 << BigSigma0::I0.count_ones()];
+    let mut i1_mult = aligned_vec![0u32; 1 << BigSigma0::I1.count_ones()];
 
     // Aggregate over all compression lookups
     for round in 0..N_COMPRESSION_ROUNDS {
@@ -70,7 +70,12 @@ pub fn gen_trace(
         );
     }
 
-    simd_vec!(i0_mult, i1_mult)
+    // Split into chunks of size log_size - LOG_N_LANES
+    into_simd(&i0_mult)
+        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
+        .collect()
 }
 
 pub fn gen_interaction_trace(
@@ -98,39 +103,52 @@ pub fn gen_interaction_trace(
     } = BigSigma0Columns::from_slice(&preprocessed_columns[..]);
 
     let simd_size = trace[0].len();
-    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
-
-    let cols = ComponentColumns::from_slice(trace);
+    let log_size = simd_size.ilog2() + LOG_N_LANES;
+    let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
     let i0 = combine!(
         relations.big_sigma_0.i0,
-        [i0_low, i0_high_0, i0_high_1, o0_low, o0_high, o20_pext]
+        [&i0_low, &i0_high_0, &i0_high_1, &o0_low, &o0_high, &o20_pext]
     );
     let i1 = combine!(
         relations.big_sigma_0.i1,
-        [i1_low_0, i1_low_1, i1_high, o1_low, o1_high, o21_pext]
+        [&i1_low_0, &i1_low_1, &i1_high, &o1_low, &o1_high, &o21_pext]
     );
 
-    write_pair!(
-        cols.i0_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i0,
-        cols.i1_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i1,
-        interaction_trace
-    );
+    for ([i0_mult, i1_mult], (i0_den, i1_den)) in trace
+        .array_chunks::<2>()
+        .zip(i0.chunks(simd_size).zip(i1.chunks(simd_size)))
+    {
+        write_pair!(
+            i0_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i0_den.to_vec(),
+            i1_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i1_den.to_vec(),
+            interaction_trace
+        );
+    }
+
     interaction_trace.finalize_last()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{partitions::SubsetIterator, preprocessed::big_sigma_0};
+    use crate::{
+        components::{
+            compression::witness::gen_trace as gen_compression_trace,
+            preprocessed::big_sigma_0::i0_i1::witness::gen_trace,
+            scheduling::witness::gen_trace as gen_scheduling_trace,
+        },
+        partitions::SubsetIterator,
+        preprocessed::big_sigma_0,
+    };
 
     #[test]
     fn test_value_at_index() {
@@ -177,5 +195,15 @@ mod tests {
                 .collect::<Vec<u32>>(),
             x_high_1.to_array().to_vec()
         );
+    }
+
+    #[test_log::test]
+    fn test_trace() {
+        const LOG_N_SHA256: u32 = 8;
+        let log_size = 21;
+        let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_SHA256);
+        let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
+        let trace = gen_trace(log_size, &scheduling_lookup_data, &compression_lookup_data);
+        assert!(trace.iter().all(|t| t.len() == trace[0].len()));
     }
 }

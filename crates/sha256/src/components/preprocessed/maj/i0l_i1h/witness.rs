@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -16,12 +16,11 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{combine, simd_vec, write_pair};
+use utils::{aligned_vec, combine, simd::into_simd, write_pair};
 
 use crate::{
     components::{
-        compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
-        preprocessed::maj::i0l_i1h::columns::ComponentColumns, W_SIZE,
+        compression::columns::RoundInteractionColumns as CompressionInteractionColumns, W_SIZE,
     },
     partitions::{pext_u32x16, BigSigma0},
     preprocessed::maj::{self, MajColumns},
@@ -30,12 +29,13 @@ use crate::{
 };
 
 pub fn gen_trace(
+    log_size: u32,
     _scheduling_lookup_data: &[Vec<u32x16>],
     compression_lookup_data: &[Vec<u32x16>],
 ) -> Vec<Vec<u32x16>> {
     // Dense counters for each relation
-    let mut i0_low_mult = vec![0u32; 1 << (BigSigma0::I0_L.count_ones() * 3)];
-    let mut i1_high_mult = vec![0u32; 1 << (BigSigma0::I1_H.count_ones() * 3)];
+    let mut i0_low_mult = aligned_vec![0u32; 1 << (BigSigma0::I0_L.count_ones() * 3)];
+    let mut i1_high_mult = aligned_vec![0u32; 1 << (BigSigma0::I1_H.count_ones() * 3)];
 
     // Aggregate over all compression lookups
     for round in 0..N_COMPRESSION_ROUNDS {
@@ -75,7 +75,11 @@ pub fn gen_trace(
         );
     }
 
-    simd_vec!(i0_low_mult, i1_high_mult)
+    into_simd(&i0_low_mult)
+        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_high_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
+        .collect()
 }
 
 pub fn gen_interaction_trace(
@@ -99,31 +103,36 @@ pub fn gen_interaction_trace(
     } = MajColumns::from_slice(&preprocessed_columns[..]);
 
     let simd_size = trace[0].len();
-    let mut interaction_trace = LogupTraceGenerator::new(simd_size.ilog2() + LOG_N_LANES);
-
-    let cols = ComponentColumns::from_slice(trace);
+    let log_size = simd_size.ilog2() + LOG_N_LANES;
+    let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
     let i0_low = combine!(
         relations.maj.i0_low,
-        [i0_low_a, i0_low_b, i0_low_c, i0_low_res]
+        [&i0_low_a, &i0_low_b, &i0_low_c, &i0_low_res]
     );
     let i1_high = combine!(
         relations.maj.i1_high,
-        [i1_high_a, i1_high_b, i1_high_c, i1_high_res]
+        [&i1_high_a, &i1_high_b, &i1_high_c, &i1_high_res]
     );
 
-    write_pair!(
-        cols.i0_low_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i0_low,
-        cols.i1_high_mult
-            .iter()
-            .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-            .map(PackedQM31::from),
-        i1_high,
-        interaction_trace
-    );
+    for ([i0_low_mult, i1_high_mult], (i0_low_den, i1_high_den)) in trace
+        .array_chunks::<2>()
+        .zip(i0_low.chunks(simd_size).zip(i1_high.chunks(simd_size)))
+    {
+        write_pair!(
+            i0_low_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i0_low_den.to_vec(),
+            i1_high_mult
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i1_high_den.to_vec(),
+            interaction_trace
+        );
+    }
+
     interaction_trace.finalize_last()
 }

@@ -16,14 +16,14 @@ bincode.workspace = true
 itertools.workspace = true
 paste.workspace = true
 test-log.workspace = true
-peak_alloc.workspace = true
+peak_alloc = { workspace = true, optional = true }
 rayon.workspace = true
 sha2.workspace = true
 utils.workspace = true
+tikv-jemallocator.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
-peak_alloc.workspace = true
 test-log.workspace = true
 
 [[bench]]
@@ -33,4 +33,6 @@ harness = false
 [features]
 slow-tests = []
 parallel = ["stwo/parallel", "stwo-constraint-framework/parallel"]
+track-relations = []
 default = []
+peak-alloc = ["peak_alloc"]

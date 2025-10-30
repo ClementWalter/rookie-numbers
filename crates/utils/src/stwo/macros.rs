@@ -3,13 +3,20 @@ macro_rules! trace_columns {
     ($name:ident, $($column:ident),* $(,)?) => {
         // ---------- Borrow version ----------
         #[derive(Debug, Clone, Copy)]
-        pub struct $name<'a, T> {
+        pub struct $name<'a, T: ?Sized> {
             $(pub $column: &'a T),*
         }
 
         #[allow(dead_code)]
+        impl<'a, T: ?Sized> $name<'a, T> {
+            #[inline(always)]
+            pub fn iter(&self) -> impl Iterator<Item = &'a T> {
+                [$(self.$column),*].into_iter()
+            }
+        }
+
+        #[allow(dead_code)]
         impl<'a, T> $name<'a, T> {
-            // ---------- Immutable "view" ----------
             #[inline(always)]
             pub fn from_slice(slice: &'a [T]) -> Self {
                 assert!(
@@ -25,16 +32,35 @@ macro_rules! trace_columns {
                 }
             }
 
-            #[inline(always)]
-            pub fn iter(&self) -> impl Iterator<Item = &'a T> {
-                // Builds a fixed array of &T; no copies of T occur.
-                [$(
-                    self.$column
-                ),*].into_iter()
+            pub fn chunks<U>(&self, chunk_size: usize) -> Vec<$name<'a, [U]>>
+            where
+                T: AsRef<[U]>,
+            {
+                itertools::izip!($( self.$column.as_ref().chunks(chunk_size) ),*)
+                    .map(|($( $column ),*)| $name { $( $column ),* })
+                    .collect()
             }
-
         }
 
+        #[allow(dead_code)]
+        impl $name<'static, ()> {
+            pub const SIZE: usize = <[()]>::len(&[$(trace_columns!(@unit $column)),*]);
+
+            pub fn to_ids(suffix: Option<u32>) -> Vec<
+                stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId
+            > {
+                vec![
+                    $(
+                        stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId {
+                            id: match suffix {
+                                Some(suffix) => format!("{}_{}_{}", stringify!($name), stringify!($column), suffix.to_string()),
+                                None => format!("{}_{}", stringify!($name), stringify!($column)),
+                            },
+                        }
+                    ),*
+                ]
+            }
+        }
 
         // ---------- Owned version ----------
         paste::paste! {
@@ -58,12 +84,15 @@ macro_rules! trace_columns {
                     }
                 }
 
-                pub fn from_ids<E>(eval: &mut E) -> Self
+                pub fn from_ids<E>(eval: &mut E, suffix: Option<u32>) -> Self
                 where
                     E: stwo_constraint_framework::EvalAtRow<F = T>,
                 {
                     Self {
-                        $($column: eval.get_preprocessed_column(stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId { id: format!("{}_{}", stringify!($name), stringify!($column)) }),)*
+                        $($column: eval.get_preprocessed_column(stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId { id: match suffix {
+                            Some(suffix) => format!("{}_{}_{}", stringify!($name), stringify!($column), suffix.to_string()),
+                            None => format!("{}_{}", stringify!($name), stringify!($column)),
+                        } }),)*
                     }
                 }
             }
@@ -71,38 +100,9 @@ macro_rules! trace_columns {
             #[allow(dead_code)]
             impl [<$name Owned>]<()> {
                 pub const SIZE: usize = <[()]>::len(&[$(trace_columns!(@unit $column)),*]);
-
-                pub fn to_ids() -> Vec<
-                    stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId
-                > {
-                    vec![
-                        $(
-                            stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId {
-                                id: format!("{}_{}", stringify!($name), stringify!($column)),
-                            }
-                        ),*
-                    ]
-                }
             }
         }
 
-        // ---------- Static version ----------
-        #[allow(dead_code)]
-        impl $name<'static, ()> {
-            pub const SIZE: usize = <[()]>::len(&[$(trace_columns!(@unit $column)),*]);
-
-            pub fn to_ids() -> Vec<
-                stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId
-            > {
-                vec![
-                    $(
-                        stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId {
-                            id: format!("{}_{}", stringify!($name), stringify!($column)),
-                        }
-                    ),*
-                ]
-            }
-        }
     };
 
     // helper
