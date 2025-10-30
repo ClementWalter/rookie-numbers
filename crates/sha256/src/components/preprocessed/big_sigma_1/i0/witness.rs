@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -16,7 +16,7 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{aligned_vec, combine, simd::into_simd, write_col};
+use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};
 
 use crate::{
     components::{
@@ -78,28 +78,42 @@ pub fn gen_interaction_trace(
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, i0_mult) in trace.iter().enumerate() {
-        let start = i * simd_size;
-        let end = start + simd_size;
+    let i0_den = combine!(
+        relations.big_sigma_1.i0,
+        [&i0_low, &i0_high, &o0_low, &o0_high, &o20_pext]
+    );
 
-        let i0 = combine!(
-            relations.big_sigma_1.i0,
-            [
-                &i0_low[start..end],
-                &i0_high[start..end],
-                &o0_low[start..end],
-                &o0_high[start..end],
-                &o20_pext[start..end]
-            ]
+    for ([i0_mult_0, i0_mult_1], (i0_den_0, i0_den_1)) in trace
+        .array_chunks::<2>()
+        .zip(i0_den.chunks(simd_size).tuple_windows())
+    {
+        write_pair!(
+            i0_mult_0
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i0_den_0.to_vec(),
+            i0_mult_1
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            i0_den_1.to_vec(),
+            interaction_trace
         );
+    }
+
+    if trace.len() % 2 == 1 {
+        let i0_mult = trace.last().unwrap();
+        let i0_den_chunk = i0_den.chunks(simd_size).last().unwrap();
         write_col!(
             i0_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            i0,
+            i0_den_chunk.to_vec(),
             interaction_trace
         );
     }
+
     interaction_trace.finalize_last()
 }

@@ -7,6 +7,19 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
+#[cfg(feature = "peak-alloc")]
+use peak_alloc::PeakAlloc;
+#[cfg(feature = "peak-alloc")]
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
+#[cfg(all(not(target_env = "msvc"), not(feature = "peak-alloc")))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(all(not(target_env = "msvc"), not(feature = "peak-alloc")))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 use num_traits::Zero;
 use stwo::{
     core::{
@@ -109,7 +122,7 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     let components =
         components::Components::new(log_size, trace_allocator, &relations, &claimed_sum);
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "track-relations")]
     println!(
         "Trace log degree bounds: {:?}",
         components.trace_log_degree_bounds()
@@ -118,12 +131,15 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     if claimed_sum.scheduling + claimed_sum.compression + claimed_sum.preprocessed.sum()
         != SecureField::zero()
     {
-        #[cfg(debug_assertions)]
-        tracing::info!(
+        #[cfg(feature = "track-relations")]
+        println!(
             "Relation summary: {:?}",
             components.track_relations(&commitment_scheme)
         );
-        panic!("Relation summary is not zero");
+        panic!(
+            "Relation summary is not zero: {}",
+            claimed_sum.scheduling + claimed_sum.compression + claimed_sum.preprocessed.sum()
+        );
     }
 
     let proof = prove(&components.provers(), channel, commitment_scheme);
@@ -139,14 +155,10 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
 mod tests {
     use std::{env, time::Instant};
 
-    use peak_alloc::PeakAlloc;
     use rayon::iter::{IntoParallelIterator, ParallelIterator};
     use tracing::info;
 
     use super::*;
-
-    #[global_allocator]
-    static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
     #[test_log::test]
     fn test_prove_sha256() {
@@ -169,6 +181,7 @@ mod tests {
         info!("Log size: {}", log_size);
         info!("Number of iterations: {}", n_iter);
 
+        #[cfg(feature = "peak-alloc")]
         PEAK_ALLOC.reset_peak_usage();
         let span = span!(Level::INFO, "Prove").entered();
 
@@ -183,7 +196,10 @@ mod tests {
             (1 << log_n_instances) as f32 * n_iter as f32 / start.elapsed().as_secs() as f32
         );
 
-        let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
-        info!("Peak memory: {} MB", peak_bytes);
+        #[cfg(feature = "peak-alloc")]
+        {
+            let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
+            info!("Peak memory: {} MB", peak_bytes);
+        }
     }
 }

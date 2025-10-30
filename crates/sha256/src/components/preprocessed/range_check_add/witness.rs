@@ -119,44 +119,47 @@ pub fn gen_interaction_trace(
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, [carry_4_mult, carry_7_mult, carry_8_mult]) in trace.array_chunks::<3>().enumerate() {
-        let start = i * simd_size;
-        let end = start + simd_size;
+    let add_4_den = combine!(relations.range_check_add.add_4, [&value, &carry_4]);
+    let add_7_den = combine!(relations.range_check_add.add_7, [&value, &carry_7]);
+    let add_8_den = combine!(relations.range_check_add.add_8, [&value, &carry_8]);
+    let dens = [add_4_den, add_7_den, add_8_den];
 
-        let carry_4_rel = combine!(
-            relations.range_check_add.add_4,
-            [&value[start..end], &carry_4[start..end]]
-        );
-        let carry_7_rel = combine!(
-            relations.range_check_add.add_7,
-            [&value[start..end], &carry_7[start..end]]
-        );
-        let carry_8_rel = combine!(
-            relations.range_check_add.add_8,
-            [&value[start..end], &carry_8[start..end]]
-        );
+    for (i, [mult_0, mult_1]) in trace.array_chunks::<2>().enumerate() {
+        let den_0 = &dens[(2 * i) % 3]
+            .chunks(simd_size)
+            .nth((2 * i) / 3)
+            .unwrap();
+        let den_1 = &dens[(2 * i + 1) % 3]
+            .chunks(simd_size)
+            .nth((2 * i + 1) / 3)
+            .unwrap();
 
         write_pair!(
-            carry_4_mult
+            mult_0
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            carry_4_rel,
-            carry_7_mult
+            den_0.to_vec(),
+            mult_1
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            carry_7_rel,
-            interaction_trace
-        );
-        write_col!(
-            carry_8_mult
-                .iter()
-                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-                .map(PackedQM31::from),
-            carry_8_rel,
+            den_1.to_vec(),
             interaction_trace
         );
     }
+
+    if trace.len() % 2 == 1 {
+        let mult = trace.last().unwrap();
+        let den = dens[2].chunks(simd_size).last().unwrap();
+        write_col!(
+            mult.iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            den.to_vec(),
+            interaction_trace
+        );
+    }
+
     interaction_trace.finalize_last()
 }

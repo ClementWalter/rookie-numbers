@@ -93,39 +93,33 @@ pub fn gen_interaction_trace(
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, [i0_low_mult, i0_high_mult]) in trace.array_chunks::<2>().enumerate() {
-        let start = i * simd_size;
-        let end = start + simd_size;
+    let i0_low = combine!(
+        relations.ch_left.i0_low,
+        [&i0_low_e, &i0_low_f, &i0_low_res]
+    );
+    let i0_high = combine!(
+        relations.ch_left.i0_high,
+        [&i0_high_e, &i0_high_f, &i0_high_res]
+    );
 
-        let i0_low = combine!(
-            relations.ch_left.i0_low,
-            [
-                &i0_low_e[start..end],
-                &i0_low_f[start..end],
-                &i0_low_res[start..end]
-            ]
-        );
-        let i0_high = combine!(
-            relations.ch_left.i0_high,
-            [
-                &i0_high_e[start..end],
-                &i0_high_f[start..end],
-                &i0_high_res[start..end]
-            ]
-        );
+    for ([i0_low_mult, i0_high_mult], (i0_low_den, i0_high_den)) in trace
+        .array_chunks::<2>()
+        .zip(i0_low.chunks(simd_size).zip(i0_high.chunks(simd_size)))
+    {
         write_pair!(
             i0_low_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            i0_low,
+            i0_low_den.to_vec(),
             i0_high_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            i0_high,
+            i0_high_den.to_vec(),
             interaction_trace
         );
     }
+
     interaction_trace.finalize_last()
 }

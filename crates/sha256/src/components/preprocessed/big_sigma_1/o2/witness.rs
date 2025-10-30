@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -9,13 +9,14 @@ use stwo::{
     prover::{
         backend::simd::{
             m31::{PackedM31, LOG_N_LANES},
+            qm31::PackedQM31,
             SimdBackend,
         },
         poly::{circle::CircleEvaluation, BitReversedOrder},
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{aligned_vec, combine, simd::into_simd, write_col};
+use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};
 
 use crate::{
     components::{
@@ -78,27 +79,39 @@ pub fn gen_interaction_trace(
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, o2_mult) in trace.iter().enumerate() {
-        let start = i * simd_size;
-        let end = start + simd_size;
+    let o2_den = combine!(relations.big_sigma_1.o2, [&o2_0, &o2_1, &o2_low, &o2_high]);
 
-        let big_sigma_1_o2 = combine!(
-            relations.big_sigma_1.o2,
-            [
-                &o2_0[start..end],
-                &o2_1[start..end],
-                &o2_low[start..end],
-                &o2_high[start..end]
-            ]
+    for ([o2_mult_0, o2_mult_1], (o2_den_0, o2_den_1)) in trace
+        .array_chunks::<2>()
+        .zip(o2_den.chunks(simd_size).tuple_windows())
+    {
+        write_pair!(
+            o2_mult_0
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            o2_den_0.to_vec(),
+            o2_mult_1
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            o2_den_1.to_vec(),
+            interaction_trace
         );
+    }
+
+    if trace.len() % 2 == 1 {
+        let o2_mult = trace.last().unwrap();
+        let o2_den_chunk = o2_den.chunks(simd_size).last().unwrap();
         write_col!(
             o2_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-                .map(|v| v.into()),
-            big_sigma_1_o2,
+                .map(PackedQM31::from),
+            o2_den_chunk.to_vec(),
             interaction_trace
         );
     }
+
     interaction_trace.finalize_last()
 }

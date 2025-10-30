@@ -1,6 +1,6 @@
 use std::simd::u32x16;
 
-use itertools::izip;
+use itertools::{izip, Itertools};
 use stwo::{
     core::{
         fields::{m31::BaseField, qm31::QM31},
@@ -56,7 +56,7 @@ pub fn gen_trace(
     into_simd(&o2_mult)
         .chunks((1 << (log_size - LOG_N_LANES)) as usize)
         .map(|chunk| chunk.to_vec())
-        .collect()
+        .collect::<Vec<Vec<u32x16>>>()
 }
 
 pub fn gen_interaction_trace(
@@ -75,70 +75,40 @@ pub fn gen_interaction_trace(
         ..
     } = Sigma0Columns::from_slice(&preprocessed_columns[..]);
 
-    println!("trace width: {:?}", trace.len());
     let simd_size = trace[0].len();
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, [o2_mult_0, o2_mult_1]) in trace.array_chunks::<2>().enumerate() {
-        let start = simd_size * 2 * i;
-        let end = start + simd_size;
+    let o2_den = combine!(relations.sigma_0.o2, [&o2_0, &o2_1, &o2_low, &o2_high]);
 
-        let o2_den_0 = combine!(
-            relations.sigma_0.o2,
-            [
-                &o2_0[start..end],
-                &o2_1[start..end],
-                &o2_low[start..end],
-                &o2_high[start..end]
-            ]
-        );
-
-        let start = simd_size * 2 * (i + 1);
-        let end = start + simd_size;
-        let o2_den_1 = combine!(
-            relations.sigma_0.o2,
-            [
-                &o2_0[start..end],
-                &o2_1[start..end],
-                &o2_low[start..end],
-                &o2_high[start..end]
-            ]
-        );
+    for ([o2_mult_0, o2_mult_1], (o2_den_0, o2_den_1)) in trace
+        .array_chunks::<2>()
+        .zip(o2_den.chunks(simd_size).tuple_windows())
+    {
         write_pair!(
             o2_mult_0
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            o2_den_0,
+            o2_den_0.to_vec(),
             o2_mult_1
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            o2_den_1,
+            o2_den_1.to_vec(),
             interaction_trace
         );
     }
 
     if trace.len() % 2 == 1 {
-        println!("last chunk");
         let o2_mult = trace.last().unwrap();
-        let o2_den = combine!(
-            relations.sigma_0.o2,
-            [
-                &o2_0[o2_0.len() - simd_size..],
-                &o2_1[o2_1.len() - simd_size..],
-                &o2_low[o2_low.len() - simd_size..],
-                &o2_high[o2_high.len() - simd_size..]
-            ]
-        );
-        println!("o2_den: {:?}", o2_den);
+        let o2_den_chunk = o2_den.chunks(simd_size).last().unwrap();
         write_col!(
             o2_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
                 .map(PackedQM31::from),
-            o2_den,
+            o2_den_chunk.to_vec(),
             interaction_trace
         );
     }

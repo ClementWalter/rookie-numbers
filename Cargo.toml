@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/rookie", "crates/sha256", "crates/utils"]
 resolver = "2"
+exclude = ["external/stwo"]
 
 [workspace.package]
 version = "0.0.1"
@@ -28,6 +29,7 @@ paste = "1.0"
 test-log = { version = "0.2.15", features = ["trace"] }
 peak_alloc = { version = "0.2" }
 sha2 = "0.10.8"
+tikv-jemallocator = "0.6.1"
 # Stwo dependencies
 bytemuck = { version = "1.14.3", default-features = false }
 hashbrown = ">=0.15.2"
