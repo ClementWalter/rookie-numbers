@@ -32,7 +32,7 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     let twiddles = SimdBackend::precompute_twiddles(
-        CanonicCoset::new(21 + config.fri_config.log_blowup_factor + 2)
+        CanonicCoset::new(log_size + config.fri_config.log_blowup_factor + 2)
             .circle_domain()
             .half_coset,
     );
@@ -84,6 +84,22 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
             .trees
             .as_ref()
             .map(|tree| tree.evaluations.len())
+    );
+    info!(
+        "Columns length: {:?}",
+        commitment_scheme.trees.as_ref().map(|tree| {
+            let max_len = tree
+                .evaluations
+                .iter()
+                .map(|eval| eval.values.length.ilog2())
+                .collect::<Vec<_>>()
+                .iter()
+                .copied()
+                .max()
+                .unwrap();
+            assert!(max_len <= log_size + 1);
+            max_len
+        })
     );
 
     // Prove constraints.

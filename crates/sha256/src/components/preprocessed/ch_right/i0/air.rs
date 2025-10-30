@@ -10,7 +10,10 @@ use crate::{
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << ((BigSigma1Partitions::I0_L.count_ones() * 2) - log_size);
+    let chunk_count = 1
+        << BigSigma1Partitions::I0
+            .count_ones()
+            .saturating_sub(log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             i0_low_mult,
@@ -53,10 +56,10 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        self.log_size
+        BigSigma1Partitions::I0.count_ones().min(self.log_size)
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        self.log_size + 1
+        BigSigma1Partitions::I0.count_ones().min(self.log_size) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);

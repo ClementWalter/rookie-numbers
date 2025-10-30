@@ -9,13 +9,14 @@ use stwo::{
     prover::{
         backend::simd::{
             m31::{PackedM31, LOG_N_LANES},
+            qm31::PackedQM31,
             SimdBackend,
         },
         poly::{circle::CircleEvaluation, BitReversedOrder},
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{aligned_vec, combine, simd::into_simd, write_col};
+use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};
 
 use crate::{
     components::{
@@ -74,15 +75,16 @@ pub fn gen_interaction_trace(
         ..
     } = Sigma0Columns::from_slice(&preprocessed_columns[..]);
 
+    println!("trace width: {:?}", trace.len());
     let simd_size = trace[0].len();
     let log_size = simd_size.ilog2() + LOG_N_LANES;
     let mut interaction_trace = LogupTraceGenerator::new(log_size);
 
-    for (i, o2_mult) in trace.iter().enumerate() {
-        let start = i * simd_size;
+    for (i, [o2_mult_0, o2_mult_1]) in trace.array_chunks::<2>().enumerate() {
+        let start = simd_size * 2 * i;
         let end = start + simd_size;
 
-        let o2 = combine!(
+        let o2_den_0 = combine!(
             relations.sigma_0.o2,
             [
                 &o2_0[start..end],
@@ -91,14 +93,55 @@ pub fn gen_interaction_trace(
                 &o2_high[start..end]
             ]
         );
+
+        let start = simd_size * 2 * (i + 1);
+        let end = start + simd_size;
+        let o2_den_1 = combine!(
+            relations.sigma_0.o2,
+            [
+                &o2_0[start..end],
+                &o2_1[start..end],
+                &o2_low[start..end],
+                &o2_high[start..end]
+            ]
+        );
+        write_pair!(
+            o2_mult_0
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            o2_den_0,
+            o2_mult_1
+                .iter()
+                .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
+                .map(PackedQM31::from),
+            o2_den_1,
+            interaction_trace
+        );
+    }
+
+    if trace.len() % 2 == 1 {
+        println!("last chunk");
+        let o2_mult = trace.last().unwrap();
+        let o2_den = combine!(
+            relations.sigma_0.o2,
+            [
+                &o2_0[o2_0.len() - simd_size..],
+                &o2_1[o2_1.len() - simd_size..],
+                &o2_low[o2_low.len() - simd_size..],
+                &o2_high[o2_high.len() - simd_size..]
+            ]
+        );
+        println!("o2_den: {:?}", o2_den);
         write_col!(
             o2_mult
                 .iter()
                 .map(|v| unsafe { PackedM31::from_simd_unchecked(*v) })
-                .map(|v| v.into()),
-            o2,
+                .map(PackedQM31::from),
+            o2_den,
             interaction_trace
         );
     }
+
     interaction_trace.finalize_last()
 }
