@@ -82,7 +82,7 @@ mod tests {
 
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let max_log_size = 21;
+        let max_log_size = 10;
         let trace = gen_trace(
             max_log_size,
             &scheduling_lookup_data,

@@ -85,7 +85,7 @@ pub fn gen_interaction_trace(
 
     for ([i1_mult_0, i1_mult_1], (i1_den_0, i1_den_1)) in trace
         .array_chunks::<2>()
-        .zip(i1_den.chunks(simd_size).tuple_windows())
+        .zip(i1_den.chunks(simd_size).tuples())
     {
         write_pair!(
             i1_mult_0
