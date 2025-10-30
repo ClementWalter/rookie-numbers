@@ -33,7 +33,7 @@ use stwo::{
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
 };
 use stwo_constraint_framework::TraceLocationAllocator;
-use tracing::{info, span, Level};
+use tracing::{debug, span, Level};
 
 use crate::{
     components::{gen_interaction_trace, gen_trace},
@@ -91,14 +91,14 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     span_1.exit();
     span.exit();
 
-    info!(
+    debug!(
         "Columns count: {:?}",
         commitment_scheme
             .trees
             .as_ref()
             .map(|tree| tree.evaluations.len())
     );
-    info!(
+    debug!(
         "Columns length: {:?}",
         commitment_scheme.trees.as_ref().map(|tree| {
             let max_len = tree
