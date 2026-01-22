@@ -19,6 +19,7 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
             sigma_1_i0_mult,
             sigma_1_i1_mult,
         } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
+        let suffix = if chunk_count == 1 { None } else { Some(chunk) };
         let Sigma1I0I1Columns {
             i0_low,
             i0_high,
@@ -30,7 +31,7 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
             o1_low,
             o1_high,
             o21_pext,
-        } = Sigma1I0I1Columns::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        } = Sigma1I0I1Columns::<<E as EvalAtRow>::F>::from_ids(eval, suffix);
         add_to_relation!(
             eval,
             relations.sigma_1.i0,

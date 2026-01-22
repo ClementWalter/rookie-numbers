@@ -5,18 +5,26 @@ use crate::{
     components::preprocessed::sigma_0::i0_i1::columns::ComponentColumnsOwned,
     partitions::Sigma0 as Sigma0Partitions,
     preprocessed::sigma_0::Sigma0I0I1ColumnsOwned,
-    preprocessed_log_size,
     relations::Relations,
 };
+#[cfg(feature = "dynamic-preprocessed-shape")]
+use crate::preprocessed_log_size;
+
+const _: () = assert!(
+    Sigma0Partitions::I0.count_ones() == Sigma0Partitions::I1.count_ones(),
+    "Sigma0Partitions::I0 and I1 must have the same number of ones"
+);
 
 pub type Component = FrameworkComponent<Eval>;
 
+#[cfg(feature = "dynamic-preprocessed-shape")]
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
     let chunk_count = 1 << Sigma0Partitions::I0.count_ones().saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumnsOwned { i0_mult, i1_mult } =
             ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
+        let suffix = if chunk_count == 1 { None } else { Some(chunk) };
         let Sigma0I0I1ColumnsOwned {
             i0_low,
             i0_high,
@@ -28,7 +36,7 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
             o1_low,
             o1_high,
             o21_pext,
-        } = Sigma0I0I1ColumnsOwned::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        } = Sigma0I0I1ColumnsOwned::<<E as EvalAtRow>::F>::from_ids(eval, suffix);
         add_to_relation!(
             eval,
             relations.sigma_0.i0,
@@ -50,7 +58,46 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
             o21_pext
         );
     }
+    eval.finalize_logup_in_pairs();
+}
 
+#[cfg(not(feature = "dynamic-preprocessed-shape"))]
+fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, _log_size: u32) {
+    let ComponentColumnsOwned { i0_mult, i1_mult } =
+        ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
+    let Sigma0I0I1ColumnsOwned {
+        i0_low,
+        i0_high,
+        o0_low,
+        o0_high,
+        o20_pext,
+        i1_low,
+        i1_high,
+        o1_low,
+        o1_high,
+        o21_pext,
+    } = Sigma0I0I1ColumnsOwned::<<E as EvalAtRow>::F>::from_ids(eval, None);
+
+    add_to_relation!(
+        eval,
+        relations.sigma_0.i0,
+        E::EF::from(i0_mult),
+        i0_low,
+        i0_high,
+        o0_low,
+        o0_high,
+        o20_pext
+    );
+    add_to_relation!(
+        eval,
+        relations.sigma_0.i1,
+        E::EF::from(i1_mult),
+        i1_low,
+        i1_high,
+        o1_low,
+        o1_high,
+        o21_pext
+    );
     eval.finalize_logup_in_pairs();
 }
 
@@ -59,17 +106,32 @@ pub struct Eval {
     pub log_size: u32,
     pub relations: Relations,
 }
+
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        Sigma0Partitions::I0
-            .count_ones()
-            .min(preprocessed_log_size(self.log_size))
+        #[cfg(feature = "dynamic-preprocessed-shape")]
+        {
+            Sigma0Partitions::I0
+                .count_ones()
+                .min(preprocessed_log_size(self.log_size))
+        }
+        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
+        {
+            Sigma0Partitions::I0.count_ones()
+        }
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        Sigma0Partitions::I0
-            .count_ones()
-            .min(preprocessed_log_size(self.log_size))
-            + 1
+        #[cfg(feature = "dynamic-preprocessed-shape")]
+        {
+            Sigma0Partitions::I0
+                .count_ones()
+                .min(preprocessed_log_size(self.log_size))
+                + 1
+        }
+        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
+        {
+            Sigma0Partitions::I0.count_ones() + 1
+        }
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -96,6 +158,8 @@ mod tests {
         },
         preprocessed::sigma_0::{self, Sigma0I0I1Columns as Sigma0I0I1ColumnsBorrowed},
     };
+    #[cfg(feature = "dynamic-preprocessed-shape")]
+    use crate::preprocessed_log_size;
 
     #[test_log::test]
     fn test_constraints() {
@@ -106,9 +170,18 @@ mod tests {
 
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
+
+        #[cfg(feature = "dynamic-preprocessed-shape")]
         let max_log_size = 10;
+        #[cfg(feature = "dynamic-preprocessed-shape")]
         let trace = gen_trace(
             max_log_size,
+            &scheduling_lookup_data,
+            &compression_lookup_data,
+        );
+        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
+        let trace = gen_trace(
+            LOG_N_ROWS,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
@@ -119,11 +192,19 @@ mod tests {
         let relations = Relations::dummy();
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
-        let sigma_0_i0_i1_cols = &sigma_0_cols[..Sigma0I0I1ColumnsBorrowed::SIZE];
-        let preprocessed_trace = Sigma0I0I1ColumnsBorrowed::from_slice(sigma_0_i0_i1_cols)
-            .chunks((1 << simd_size) as usize)
-            .into_iter()
-            .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
+        #[cfg(feature = "dynamic-preprocessed-shape")]
+        let preprocessed_trace = {
+            let sigma_0_i0_i1_cols = &sigma_0_cols[..Sigma0I0I1ColumnsBorrowed::SIZE];
+            Sigma0I0I1ColumnsBorrowed::from_slice(sigma_0_i0_i1_cols)
+                .chunks((1 << simd_size) as usize)
+                .into_iter()
+                .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
+                .collect::<Vec<_>>()
+        };
+        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
+        let preprocessed_trace = sigma_0_cols[..Sigma0I0I1ColumnsOwned::SIZE]
+            .iter()
+            .map(|c| circle_evaluation_u32x16!(c))
             .collect::<Vec<_>>();
 
         let traces = TreeVec::new(vec![
