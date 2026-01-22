@@ -3,14 +3,17 @@ use utils::add_to_relation;
 
 use crate::{
     components::preprocessed::sigma_0::i0_i1::columns::ComponentColumnsOwned,
-    partitions::Sigma0 as Sigma0Partitions, preprocessed::sigma_0::Sigma0I0I1ColumnsOwned,
+    partitions::Sigma0 as Sigma0Partitions,
+    preprocessed::sigma_0::Sigma0I0I1ColumnsOwned,
+    preprocessed_log_size,
     relations::Relations,
 };
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << Sigma0Partitions::I0.count_ones().saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << Sigma0Partitions::I0.count_ones().saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumnsOwned { i0_mult, i1_mult } =
             ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
@@ -58,10 +61,15 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        Sigma0Partitions::I0.count_ones().min(self.log_size)
+        Sigma0Partitions::I0
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        Sigma0Partitions::I0.count_ones().min(self.log_size) + 1
+        Sigma0Partitions::I0
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
+            + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);

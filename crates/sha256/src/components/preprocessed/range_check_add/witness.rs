@@ -24,6 +24,7 @@ use crate::{
         scheduling::columns::RoundInteractionColumns as SchedulingInteractionColumns, W_SIZE,
     },
     preprocessed::range_check_add::{self, RangeCheckAddColumns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::{N_COMPRESSION_ROUNDS, N_SCHEDULING_ROUNDS},
 };
@@ -92,10 +93,11 @@ pub fn gen_trace(
         });
     }
 
+    let effective_log_size = preprocessed_log_size(log_size);
     into_simd(&carry_4_mult)
-        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
-        .zip(into_simd(&carry_7_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
-        .zip(into_simd(&carry_8_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .chunks((1 << (effective_log_size - LOG_N_LANES)) as usize)
+        .zip(into_simd(&carry_7_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
+        .zip(into_simd(&carry_8_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
         .flat_map(|((c4, c7), c8)| [c4.to_vec(), c7.to_vec(), c8.to_vec()])
         .collect()
 }

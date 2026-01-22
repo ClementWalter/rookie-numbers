@@ -13,6 +13,8 @@ use stwo::{
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use utils::circle_evaluation_u32x16;
 
+use crate::preprocessed_log_size;
+
 pub mod big_sigma_0;
 pub mod big_sigma_1;
 pub mod ch_left;
@@ -33,7 +35,8 @@ impl PreProcessedTrace {
         let mut trace = Vec::new();
         let mut ids = Vec::new();
         debug_assert!(log_size >= LOG_N_LANES);
-        let chunk_size = 1 << (log_size - LOG_N_LANES);
+        let effective_log_size = preprocessed_log_size(log_size);
+        let chunk_size = 1 << (effective_log_size - LOG_N_LANES);
 
         // Helper macro to process each module once
         macro_rules! collect_columns {

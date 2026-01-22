@@ -4,13 +4,16 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::maj::i0h1_i1l1::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma0 as BigSigma0Partitions,
-    preprocessed::maj::MajI0H1I1L1ColumnsOwned as MajI0H1I1L1Columns, relations::Relations,
+    preprocessed::maj::MajI0H1I1L1ColumnsOwned as MajI0H1I1L1Columns,
+    preprocessed_log_size,
+    relations::Relations,
 };
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << (BigSigma0Partitions::I0_H1.count_ones() * 3).saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << (BigSigma0Partitions::I0_H1.count_ones() * 3).saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             i0_high_1_mult,
@@ -55,10 +58,10 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(self.log_size)
+        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(self.log_size) + 1
+        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(preprocessed_log_size(self.log_size)) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);

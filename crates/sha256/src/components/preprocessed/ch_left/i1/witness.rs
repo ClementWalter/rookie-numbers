@@ -24,6 +24,7 @@ use crate::{
     },
     partitions::{pext_u32x16, BigSigma1},
     preprocessed::ch_left::{self, ChLeftColumns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
 };
@@ -64,9 +65,10 @@ pub fn gen_trace(
         });
     }
 
+    let effective_log_size = preprocessed_log_size(log_size);
     into_simd(&i1_low_mult)
-        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
-        .zip_eq(into_simd(&i1_high_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .chunks((1 << (effective_log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_high_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
         .flat_map(|(i1_low, i1_high)| [i1_low.to_vec(), i1_high.to_vec()])
         .collect()
 }

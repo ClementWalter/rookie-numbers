@@ -4,13 +4,15 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::range_check_add::columns::ComponentColumnsOwned as ComponentColumns,
     preprocessed::range_check_add::RangeCheckAddColumnsOwned as RangeCheckAddColumns,
+    preprocessed_log_size,
     relations::Relations,
 };
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << 19_u32.saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << 19_u32.saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             carry_4_mult,
@@ -55,10 +57,10 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        19_u32.min(self.log_size)
+        19_u32.min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        19_u32.min(self.log_size) + 1
+        19_u32.min(preprocessed_log_size(self.log_size)) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);

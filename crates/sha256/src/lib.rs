@@ -58,11 +58,35 @@ use crate::{
     relations::Relations,
 };
 
+/// Maximum log_size used for preprocessed column chunking when `dynamic-preprocessed-shape`
+/// feature is disabled. This prevents excessive column splitting for small proofs.
+pub const MAX_PREPROCESSED_LOG_SIZE: u32 = 21;
+
+/// Returns the effective log_size for preprocessed column chunking.
+///
+/// When `dynamic-preprocessed-shape` feature is enabled, returns the actual log_size,
+/// which optimizes for large proofs by matching preprocessing to the exact proof size.
+///
+/// When disabled (default), returns MAX_PREPROCESSED_LOG_SIZE, which avoids creating
+/// very wide AIRs with few rows when proving small numbers of sha256 hashes.
+#[cfg(feature = "dynamic-preprocessed-shape")]
+pub fn preprocessed_log_size(log_size: u32) -> u32 {
+    log_size
+}
+
+#[cfg(not(feature = "dynamic-preprocessed-shape"))]
+pub fn preprocessed_log_size(log_size: u32) -> u32 {
+    MAX_PREPROCESSED_LOG_SIZE.max(log_size)
+}
+
 pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkleHasher> {
-    // Precompute twiddles.
+    // Precompute twiddles. Use the effective preprocessed log size since preprocessed
+    // columns may have sizes larger than the main trace when dynamic-preprocessed-shape
+    // is disabled.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
+    let effective_log_size = preprocessed_log_size(log_size).max(log_size);
     let twiddles = SimdBackend::precompute_twiddles(
-        CanonicCoset::new(log_size + config.fri_config.log_blowup_factor + 2)
+        CanonicCoset::new(effective_log_size + config.fri_config.log_blowup_factor + 2)
             .circle_domain()
             .half_coset,
     );
@@ -178,6 +202,8 @@ pub fn print_enabled_features() {
         "peak-alloc",
         #[cfg(feature = "jemalloc")]
         "jemalloc",
+        #[cfg(feature = "dynamic-preprocessed-shape")]
+        "dynamic-preprocessed-shape",
     ];
 
     if features.is_empty() {

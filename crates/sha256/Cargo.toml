@@ -37,6 +37,11 @@ slow-tests = []
 parallel = ["stwo/parallel", "stwo-constraint-framework/parallel"]
 track-relations = []
 default = []
+# When enabled, preprocessed columns are dynamically sized based on log_size.
+# This is optimal for large proofs (millions of hashes) but creates very wide AIRs
+# with few rows for small proofs. When disabled (default), preprocessed columns
+# use a fixed maximum size (LOG_SIZE=21) regardless of actual proof size.
+dynamic-preprocessed-shape = []
 peak-alloc = ["dep:peak_alloc"]
 jemalloc = ["dep:tikv-jemallocator"]
 mimalloc = ["dep:mimalloc"]
