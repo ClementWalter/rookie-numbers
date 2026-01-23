@@ -153,8 +153,6 @@ mod tests {
             self, ChLeftI0Columns, ChLeftI1Columns as ChLeftI1ColumnsBorrowed,
         },
     };
-    #[cfg(feature = "dynamic-preprocessed-shape")]
-    use crate::preprocessed_log_size;
 
     #[test_log::test]
     fn test_constraints() {

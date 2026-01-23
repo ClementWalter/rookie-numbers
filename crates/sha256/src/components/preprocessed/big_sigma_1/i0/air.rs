@@ -127,8 +127,6 @@ mod tests {
         },
         preprocessed::big_sigma_1::{self, BigSigma1I0Columns as BigSigma1I0ColumnsBorrowed},
     };
-    #[cfg(feature = "dynamic-preprocessed-shape")]
-    use crate::preprocessed_log_size;
 
     #[test_log::test]
     fn test_constraints() {

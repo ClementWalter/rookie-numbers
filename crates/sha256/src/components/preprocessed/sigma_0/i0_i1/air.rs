@@ -158,8 +158,6 @@ mod tests {
         },
         preprocessed::sigma_0::{self, Sigma0I0I1Columns as Sigma0I0I1ColumnsBorrowed},
     };
-    #[cfg(feature = "dynamic-preprocessed-shape")]
-    use crate::preprocessed_log_size;
 
     #[test_log::test]
     fn test_constraints() {
