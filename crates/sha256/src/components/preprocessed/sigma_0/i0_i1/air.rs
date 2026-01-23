@@ -156,8 +156,10 @@ mod tests {
             preprocessed::sigma_0::i0_i1::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::sigma_0::{self, Sigma0I0I1Columns as Sigma0I0I1ColumnsBorrowed},
+        preprocessed::sigma_0,
     };
+    #[cfg(feature = "dynamic-preprocessed-shape")]
+    use crate::preprocessed::sigma_0::Sigma0I0I1Columns as Sigma0I0I1ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

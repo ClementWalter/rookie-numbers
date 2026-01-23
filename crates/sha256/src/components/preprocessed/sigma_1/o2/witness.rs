@@ -11,12 +11,13 @@ use stwo::{
     prover::{
         backend::simd::{
             m31::{PackedM31, LOG_N_LANES},
-            qm31::PackedQM31,
             SimdBackend,
         },
         poly::{circle::CircleEvaluation, BitReversedOrder},
     },
 };
+#[cfg(feature = "dynamic-preprocessed-shape")]
+use stwo::prover::backend::simd::qm31::PackedQM31;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 #[cfg(feature = "dynamic-preprocessed-shape")]
 use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};

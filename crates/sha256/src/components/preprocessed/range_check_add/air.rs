@@ -140,10 +140,10 @@ mod tests {
             preprocessed::range_check_add::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::range_check_add::{
-            self, RangeCheckAddColumns as RangeCheckAddColumnsBorrowed,
-        },
+        preprocessed::range_check_add,
     };
+    #[cfg(feature = "dynamic-preprocessed-shape")]
+    use crate::preprocessed::range_check_add::RangeCheckAddColumns as RangeCheckAddColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

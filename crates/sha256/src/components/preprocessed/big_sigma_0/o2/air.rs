@@ -111,10 +111,10 @@ mod tests {
             preprocessed::big_sigma_0::o2::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::big_sigma_0::{
-            self, BigSigma0I0I1Columns, BigSigma0O2Columns as BigSigma0O2ColumnsBorrowed,
-        },
+        preprocessed::big_sigma_0::{self, BigSigma0I0I1Columns},
     };
+    #[cfg(feature = "dynamic-preprocessed-shape")]
+    use crate::preprocessed::big_sigma_0::BigSigma0O2Columns as BigSigma0O2ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

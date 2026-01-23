@@ -143,8 +143,10 @@ mod tests {
             preprocessed::maj::i0l_i1h::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::maj::{self, MajI0LI1HColumns as MajI0LI1HColumnsBorrowed},
+        preprocessed::maj,
     };
+    #[cfg(feature = "dynamic-preprocessed-shape")]
+    use crate::preprocessed::maj::MajI0LI1HColumns as MajI0LI1HColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {
