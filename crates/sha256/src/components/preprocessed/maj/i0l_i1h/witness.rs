@@ -27,6 +27,7 @@ use crate::{
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
 };
+use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,
@@ -75,9 +76,10 @@ pub fn gen_trace(
         );
     }
 
+    let effective_log_size = preprocessed_log_size(log_size);
     into_simd(&i0_low_mult)
-        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
-        .zip_eq(into_simd(&i1_high_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .chunks((1 << (effective_log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_high_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
         .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
         .collect()
 }
@@ -136,3 +138,4 @@ pub fn gen_interaction_trace(
 
     interaction_trace.finalize_last()
 }
+

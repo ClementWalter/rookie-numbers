@@ -4,21 +4,25 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::sigma_0::o2::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::Sigma0 as Sigma0Partitions,
-    preprocessed::sigma_0::Sigma0O2ColumnsOwned as Sigma0O2Columns, relations::Relations,
+    preprocessed::sigma_0::Sigma0O2ColumnsOwned as Sigma0O2Columns,
+    relations::Relations,
 };
+use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << (Sigma0Partitions::O2.count_ones() * 2).saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << (Sigma0Partitions::O2.count_ones() * 2).saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns { o2_mult } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
+        let suffix = if chunk_count == 1 { None } else { Some(chunk) };
         let Sigma0O2Columns {
             o2_0,
             o2_1,
             o2_low,
             o2_high,
-        } = Sigma0O2Columns::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        } = Sigma0O2Columns::<<E as EvalAtRow>::F>::from_ids(eval, suffix);
         add_to_relation!(
             eval,
             relations.sigma_0.o2,
@@ -37,12 +41,13 @@ pub struct Eval {
     pub log_size: u32,
     pub relations: Relations,
 }
+
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        (Sigma0Partitions::O2.count_ones() * 2).min(self.log_size)
+        (Sigma0Partitions::O2.count_ones() * 2).min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        (Sigma0Partitions::O2.count_ones() * 2).min(self.log_size) + 1
+        (Sigma0Partitions::O2.count_ones() * 2).min(preprocessed_log_size(self.log_size)) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -67,10 +72,9 @@ mod tests {
             preprocessed::sigma_0::o2::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::sigma_0::{
-            self, Sigma0I0I1Columns, Sigma0O2Columns as Sigma0O2ColumnsBorrowed,
-        },
+        preprocessed::sigma_0::{self, Sigma0I0I1Columns},
     };
+    use crate::preprocessed::sigma_0::Sigma0O2Columns as Sigma0O2ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {
@@ -79,9 +83,10 @@ mod tests {
         // Trace.
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let max_log_size = 10;
+
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
@@ -93,13 +98,16 @@ mod tests {
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
         let sigma_0_cols = sigma_0::gen_column_simd();
-        let sigma_0_o2_cols = &sigma_0_cols
-            [Sigma0I0I1Columns::SIZE..(Sigma0I0I1Columns::SIZE + Sigma0O2Columns::SIZE)];
-        let preprocessed_trace = Sigma0O2ColumnsBorrowed::from_slice(sigma_0_o2_cols)
-            .chunks((1 << simd_size) as usize)
-            .into_iter()
-            .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
-            .collect::<Vec<_>>();
+
+        let preprocessed_trace = {
+            let sigma_0_o2_cols = &sigma_0_cols
+                [Sigma0I0I1Columns::SIZE..(Sigma0I0I1Columns::SIZE + Sigma0O2Columns::SIZE)];
+            Sigma0O2ColumnsBorrowed::from_slice(sigma_0_o2_cols)
+                .chunks((1 << simd_size) as usize)
+                .into_iter()
+                .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
+                .collect::<Vec<_>>()
+        };
 
         let traces = TreeVec::new(vec![
             preprocessed_trace,

@@ -4,18 +4,22 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::maj::i0h1_i1l1::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma0 as BigSigma0Partitions,
-    preprocessed::maj::MajI0H1I1L1ColumnsOwned as MajI0H1I1L1Columns, relations::Relations,
+    preprocessed::maj::MajI0H1I1L1ColumnsOwned as MajI0H1I1L1Columns,
+    relations::Relations,
 };
+use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << (BigSigma0Partitions::I0_H1.count_ones() * 3).saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << (BigSigma0Partitions::I0_H1.count_ones() * 3).saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             i0_high_1_mult,
             i1_low_1_mult,
         } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
+        let suffix = if chunk_count == 1 { None } else { Some(chunk) };
         let MajI0H1I1L1Columns {
             i0_high_1_a,
             i0_high_1_b,
@@ -25,7 +29,7 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
             i1_low_1_b,
             i1_low_1_c,
             i1_low_1_res,
-        } = MajI0H1I1L1Columns::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        } = MajI0H1I1L1Columns::<<E as EvalAtRow>::F>::from_ids(eval, suffix);
         add_to_relation!(
             eval,
             relations.maj.i0_high_1,
@@ -55,10 +59,13 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(self.log_size)
+        (BigSigma0Partitions::I0_H1.count_ones() * 3)
+            .min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        (BigSigma0Partitions::I0_H1.count_ones() * 3).min(self.log_size) + 1
+        (BigSigma0Partitions::I0_H1.count_ones() * 3)
+            .min(preprocessed_log_size(self.log_size))
+            + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -83,8 +90,9 @@ mod tests {
             preprocessed::maj::i0h1_i1l1::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::maj::{self, MajI0H1I1L1Columns as MajI0H1I1L1ColumnsBorrowed},
+        preprocessed::maj,
     };
+    use crate::preprocessed::maj::MajI0H1I1L1Columns as MajI0H1I1L1ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {
@@ -93,9 +101,9 @@ mod tests {
         // Trace.
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let max_log_size = 10;
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );

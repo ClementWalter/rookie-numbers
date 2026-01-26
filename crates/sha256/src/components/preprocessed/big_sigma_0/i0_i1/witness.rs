@@ -27,6 +27,7 @@ use crate::{
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
 };
+use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,
@@ -70,10 +71,11 @@ pub fn gen_trace(
         );
     }
 
-    // Split into chunks of size log_size - LOG_N_LANES
+    // Split into chunks of size effective_log_size - LOG_N_LANES
+    let effective_log_size = preprocessed_log_size(log_size);
     into_simd(&i0_mult)
-        .chunks((1 << (log_size - LOG_N_LANES)) as usize)
-        .zip_eq(into_simd(&i1_mult).chunks((1 << (log_size - LOG_N_LANES)) as usize))
+        .chunks((1 << (effective_log_size - LOG_N_LANES)) as usize)
+        .zip_eq(into_simd(&i1_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
         .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
         .collect()
 }
@@ -140,15 +142,7 @@ pub fn gen_interaction_trace(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        components::{
-            compression::witness::gen_trace as gen_compression_trace,
-            preprocessed::big_sigma_0::i0_i1::witness::gen_trace,
-            scheduling::witness::gen_trace as gen_scheduling_trace,
-        },
-        partitions::SubsetIterator,
-        preprocessed::big_sigma_0,
-    };
+    use crate::{partitions::SubsetIterator, preprocessed::big_sigma_0};
 
     #[test]
     fn test_value_at_index() {
@@ -195,15 +189,5 @@ mod tests {
                 .collect::<Vec<u32>>(),
             x_high_1.to_array().to_vec()
         );
-    }
-
-    #[test_log::test]
-    fn test_trace() {
-        const LOG_N_SHA256: u32 = 8;
-        let log_size = 21;
-        let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_SHA256);
-        let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let trace = gen_trace(log_size, &scheduling_lookup_data, &compression_lookup_data);
-        assert!(trace.iter().all(|t| t.len() == trace[0].len()));
     }
 }

@@ -13,6 +13,8 @@ use stwo::{
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use utils::circle_evaluation_u32x16;
 
+use crate::preprocessed_log_size;
+
 pub mod big_sigma_0;
 pub mod big_sigma_1;
 pub mod ch_left;
@@ -33,7 +35,8 @@ impl PreProcessedTrace {
         let mut trace = Vec::new();
         let mut ids = Vec::new();
         debug_assert!(log_size >= LOG_N_LANES);
-        let chunk_size = 1 << (log_size - LOG_N_LANES);
+        let effective_log_size = preprocessed_log_size(log_size);
+        let chunk_size = 1 << (effective_log_size - LOG_N_LANES);
 
         // Helper macro to process each module once
         macro_rules! collect_columns {
@@ -47,11 +50,17 @@ impl PreProcessedTrace {
                 )+
 
                 for (id_base, col) in module_ids.into_iter().zip_eq(module_cols.into_iter()) {
-                    for (suffix, chunk) in col.chunks(chunk_size).enumerate() {
+                    let chunks: Vec<_> = col.chunks(chunk_size).collect();
+                    let single_chunk = chunks.len() == 1;
+                    for (suffix, chunk) in chunks.into_iter().enumerate() {
                         trace.push(circle_evaluation_u32x16!(chunk));
-                        ids.push(PreProcessedColumnId {
-                            id: format!("{}_{}", id_base.id, suffix),
-                        });
+                        // Only add suffix when there are multiple chunks, to match original ID format
+                        let id = if single_chunk {
+                            id_base.id.clone()
+                        } else {
+                            format!("{}_{}", id_base.id, suffix)
+                        };
+                        ids.push(PreProcessedColumnId { id });
                     }
                 }
             }};
@@ -87,7 +96,12 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let trace = PreProcessedTrace::new(8);
-        assert!(trace.trace.iter().map(|t| t.data.len()).max().unwrap() <= 1 << (8 - LOG_N_LANES));
+        let log_size = 8;
+        let trace = PreProcessedTrace::new(log_size);
+        let effective_log_size = preprocessed_log_size(log_size);
+        assert!(
+            trace.trace.iter().map(|t| t.data.len()).max().unwrap()
+                <= 1 << (effective_log_size - LOG_N_LANES)
+        );
     }
 }

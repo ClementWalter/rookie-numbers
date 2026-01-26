@@ -6,23 +6,26 @@ use crate::{
     preprocessed::range_check_add::RangeCheckAddColumnsOwned as RangeCheckAddColumns,
     relations::Relations,
 };
+use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
-    let chunk_count = 1 << 19_u32.saturating_sub(log_size);
+    let effective_log_size = preprocessed_log_size(log_size);
+    let chunk_count = 1 << 19_u32.saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             carry_4_mult,
             carry_7_mult,
             carry_8_mult,
         } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
+        let suffix = if chunk_count == 1 { None } else { Some(chunk) };
         let RangeCheckAddColumns {
             value,
             carry_4,
             carry_7,
             carry_8,
-        } = RangeCheckAddColumns::<<E as EvalAtRow>::F>::from_ids(eval, Some(chunk));
+        } = RangeCheckAddColumns::<<E as EvalAtRow>::F>::from_ids(eval, suffix);
         add_to_relation!(
             eval,
             relations.range_check_add.add_4,
@@ -55,10 +58,10 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        19_u32.min(self.log_size)
+        19_u32.min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        19_u32.min(self.log_size) + 1
+        19_u32.min(preprocessed_log_size(self.log_size)) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -83,10 +86,9 @@ mod tests {
             preprocessed::range_check_add::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::range_check_add::{
-            self, RangeCheckAddColumns as RangeCheckAddColumnsBorrowed,
-        },
+        preprocessed::range_check_add,
     };
+    use crate::preprocessed::range_check_add::RangeCheckAddColumns as RangeCheckAddColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {
@@ -95,9 +97,9 @@ mod tests {
         // Trace.
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        let max_log_size = 10;
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
