@@ -40,7 +40,9 @@ default = []
 # When enabled, preprocessed columns are dynamically sized based on log_size.
 # This is optimal for large proofs (millions of hashes) but creates very wide AIRs
 # with few rows for small proofs. When disabled (default), preprocessed columns
-# use a fixed maximum size (LOG_SIZE=21) regardless of actual proof size.
+# use a fixed chunking threshold (MAX_PREPROCESSED_LOG_SIZE=21). The largest current
+# preprocessed table is log_size 21, so this keeps small proofs single-chunk while
+# allowing larger proofs to scale.
 dynamic-preprocessed-shape = []
 peak-alloc = ["dep:peak_alloc"]
 jemalloc = ["dep:tikv-jemallocator"]

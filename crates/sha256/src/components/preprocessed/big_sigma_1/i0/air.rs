@@ -7,12 +7,10 @@ use crate::{
     preprocessed::big_sigma_1::BigSigma1I0ColumnsOwned,
     relations::Relations,
 };
-#[cfg(feature = "dynamic-preprocessed-shape")]
 use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
-#[cfg(feature = "dynamic-preprocessed-shape")]
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
     let chunk_count = 1
@@ -45,31 +43,6 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
     eval.finalize_logup_in_pairs();
 }
 
-#[cfg(not(feature = "dynamic-preprocessed-shape"))]
-fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, _log_size: u32) {
-    let ComponentColumnsOwned { i0_mult } =
-        ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
-    let BigSigma1I0ColumnsOwned {
-        i0_low,
-        i0_high,
-        o0_low,
-        o0_high,
-        o20_pext,
-    } = BigSigma1I0ColumnsOwned::<<E as EvalAtRow>::F>::from_ids(eval, None);
-
-    add_to_relation!(
-        eval,
-        relations.big_sigma_1.i0,
-        E::EF::from(i0_mult),
-        i0_low,
-        i0_high,
-        o0_low,
-        o0_high,
-        o20_pext
-    );
-    eval.finalize_logup_in_pairs();
-}
-
 #[derive(Clone)]
 pub struct Eval {
     pub log_size: u32,
@@ -78,29 +51,15 @@ pub struct Eval {
 
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            BigSigma1Partitions::I0
-                .count_ones()
-                .min(preprocessed_log_size(self.log_size))
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            BigSigma1Partitions::I0.count_ones()
-        }
+        BigSigma1Partitions::I0
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            BigSigma1Partitions::I0
-                .count_ones()
-                .min(preprocessed_log_size(self.log_size))
-                + 1
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            BigSigma1Partitions::I0.count_ones() + 1
-        }
+        BigSigma1Partitions::I0
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
+            + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -138,17 +97,9 @@ mod tests {
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
 
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        let max_log_size = 10;
-        #[cfg(feature = "dynamic-preprocessed-shape")]
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
-            &scheduling_lookup_data,
-            &compression_lookup_data,
-        );
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let trace = gen_trace(
-            LOG_N_ROWS,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
@@ -159,7 +110,6 @@ mod tests {
         let relations = Relations::dummy();
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
-        #[cfg(feature = "dynamic-preprocessed-shape")]
         let preprocessed_trace = {
             let big_sigma_1_i0_cols = &big_sigma_1_cols[..BigSigma1I0ColumnsBorrowed::SIZE];
             BigSigma1I0ColumnsBorrowed::from_slice(big_sigma_1_i0_cols)
@@ -168,11 +118,6 @@ mod tests {
                 .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
                 .collect::<Vec<_>>()
         };
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let preprocessed_trace = big_sigma_1_cols[..BigSigma1I0ColumnsBorrowed::SIZE]
-            .iter()
-            .map(|c| circle_evaluation_u32x16!(c))
-            .collect::<Vec<_>>();
 
         let traces = TreeVec::new(vec![
             preprocessed_trace,

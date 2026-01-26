@@ -59,17 +59,17 @@ use crate::{
 };
 
 /// Maximum log_size used for preprocessed column chunking when `dynamic-preprocessed-shape`
-/// feature is disabled. Set to 24 to ensure no chunking occurs (largest partition is 20 bits,
-/// chunk_size = 1 << (24 - LOG_N_LANES) = 1 << 20 which covers all partitions).
-pub const MAX_PREPROCESSED_LOG_SIZE: u32 = 24;
+/// feature is disabled. Set to 21 as a chunking threshold; the largest current preprocessed
+/// table is log_size 21, so this keeps non-dynamic mode in a single chunk.
+pub const MAX_PREPROCESSED_LOG_SIZE: u32 = 21;
 
 /// Returns the effective log_size for preprocessed column chunking.
 ///
 /// When `dynamic-preprocessed-shape` feature is enabled, returns the actual log_size,
 /// which optimizes for large proofs by matching preprocessing to the exact proof size.
 ///
-/// When disabled (default), returns MAX_PREPROCESSED_LOG_SIZE, which matches the behavior
-/// before the dynamic preprocessing feature was introduced.
+/// When disabled (default), returns max(log_size, MAX_PREPROCESSED_LOG_SIZE) so small proofs
+/// use a fixed preprocessed size (one chunk, unsuffixed IDs) while larger proofs scale.
 #[cfg(feature = "dynamic-preprocessed-shape")]
 pub fn preprocessed_log_size(log_size: u32) -> u32 {
     log_size

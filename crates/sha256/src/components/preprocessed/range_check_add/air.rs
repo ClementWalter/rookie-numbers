@@ -6,12 +6,10 @@ use crate::{
     preprocessed::range_check_add::RangeCheckAddColumnsOwned as RangeCheckAddColumns,
     relations::Relations,
 };
-#[cfg(feature = "dynamic-preprocessed-shape")]
 use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
-#[cfg(feature = "dynamic-preprocessed-shape")]
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
     let chunk_count = 1 << 19_u32.saturating_sub(effective_log_size);
@@ -53,44 +51,6 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
     eval.finalize_logup_in_pairs();
 }
 
-#[cfg(not(feature = "dynamic-preprocessed-shape"))]
-fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, _log_size: u32) {
-    let ComponentColumns {
-        carry_4_mult,
-        carry_7_mult,
-        carry_8_mult,
-    } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
-    let RangeCheckAddColumns {
-        value,
-        carry_4,
-        carry_7,
-        carry_8,
-    } = RangeCheckAddColumns::<<E as EvalAtRow>::F>::from_ids(eval, None);
-
-    add_to_relation!(
-        eval,
-        relations.range_check_add.add_4,
-        E::EF::from(carry_4_mult),
-        value,
-        carry_4,
-    );
-    add_to_relation!(
-        eval,
-        relations.range_check_add.add_7,
-        E::EF::from(carry_7_mult),
-        value,
-        carry_7,
-    );
-    add_to_relation!(
-        eval,
-        relations.range_check_add.add_8,
-        E::EF::from(carry_8_mult),
-        value,
-        carry_8,
-    );
-    eval.finalize_logup_in_pairs();
-}
-
 #[derive(Clone)]
 pub struct Eval {
     pub log_size: u32,
@@ -98,24 +58,10 @@ pub struct Eval {
 }
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            19_u32.min(preprocessed_log_size(self.log_size))
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            19
-        }
+        19_u32.min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            19_u32.min(preprocessed_log_size(self.log_size)) + 1
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            19 + 1
-        }
+        19_u32.min(preprocessed_log_size(self.log_size)) + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -142,7 +88,6 @@ mod tests {
         },
         preprocessed::range_check_add,
     };
-    #[cfg(feature = "dynamic-preprocessed-shape")]
     use crate::preprocessed::range_check_add::RangeCheckAddColumns as RangeCheckAddColumnsBorrowed;
 
     #[test_log::test]
@@ -152,17 +97,9 @@ mod tests {
         // Trace.
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        let max_log_size = 10;
-        #[cfg(feature = "dynamic-preprocessed-shape")]
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
-            &scheduling_lookup_data,
-            &compression_lookup_data,
-        );
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let trace = gen_trace(
-            LOG_N_ROWS,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
@@ -174,16 +111,10 @@ mod tests {
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
         let range_check_add_cols = range_check_add::gen_column_simd();
-        #[cfg(feature = "dynamic-preprocessed-shape")]
         let preprocessed_trace = RangeCheckAddColumnsBorrowed::from_slice(&range_check_add_cols)
             .chunks((1 << simd_size) as usize)
             .into_iter()
             .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
-            .collect::<Vec<_>>();
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let preprocessed_trace = range_check_add_cols
-            .iter()
-            .map(|c| circle_evaluation_u32x16!(c))
             .collect::<Vec<_>>();
 
         let traces = TreeVec::new(vec![

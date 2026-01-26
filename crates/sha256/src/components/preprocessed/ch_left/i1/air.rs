@@ -7,7 +7,6 @@ use crate::{
     preprocessed::ch_left::ChLeftI1ColumnsOwned as ChLeftI1Columns,
     relations::Relations,
 };
-#[cfg(feature = "dynamic-preprocessed-shape")]
 use crate::preprocessed_log_size;
 
 const _: () = assert!(
@@ -17,7 +16,6 @@ const _: () = assert!(
 
 pub type Component = FrameworkComponent<Eval>;
 
-#[cfg(feature = "dynamic-preprocessed-shape")]
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
     let chunk_count = 1
@@ -60,40 +58,6 @@ fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size:
     eval.finalize_logup_in_pairs();
 }
 
-#[cfg(not(feature = "dynamic-preprocessed-shape"))]
-fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, _log_size: u32) {
-    let ComponentColumns {
-        i1_low_mult,
-        i1_high_mult,
-    } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
-    let ChLeftI1Columns {
-        i1_low_e,
-        i1_low_f,
-        i1_low_res,
-        i1_high_e,
-        i1_high_f,
-        i1_high_res,
-    } = ChLeftI1Columns::<<E as EvalAtRow>::F>::from_ids(eval, None);
-
-    add_to_relation!(
-        eval,
-        relations.ch_left.i1_low,
-        E::EF::from(i1_low_mult),
-        i1_low_e,
-        i1_low_f,
-        i1_low_res,
-    );
-    add_to_relation!(
-        eval,
-        relations.ch_left.i1_high,
-        E::EF::from(i1_high_mult),
-        i1_high_e,
-        i1_high_f,
-        i1_high_res,
-    );
-    eval.finalize_logup_in_pairs();
-}
-
 #[derive(Clone)]
 pub struct Eval {
     pub log_size: u32,
@@ -102,29 +66,15 @@ pub struct Eval {
 
 impl FrameworkEval for Eval {
     fn log_size(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            BigSigma1Partitions::I1
-                .count_ones()
-                .min(preprocessed_log_size(self.log_size))
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            BigSigma1Partitions::I1.count_ones()
-        }
+        BigSigma1Partitions::I1
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
     }
     fn max_constraint_log_degree_bound(&self) -> u32 {
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        {
-            BigSigma1Partitions::I1
-                .count_ones()
-                .min(preprocessed_log_size(self.log_size))
-                + 1
-        }
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        {
-            BigSigma1Partitions::I1.count_ones() + 1
-        }
+        BigSigma1Partitions::I1
+            .count_ones()
+            .min(preprocessed_log_size(self.log_size))
+            + 1
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         eval_constraints(&mut eval, &self.relations, self.log_size);
@@ -151,7 +101,6 @@ mod tests {
         },
         preprocessed::ch_left::{self, ChLeftI0Columns},
     };
-    #[cfg(feature = "dynamic-preprocessed-shape")]
     use crate::preprocessed::ch_left::ChLeftI1Columns as ChLeftI1ColumnsBorrowed;
 
     #[test_log::test]
@@ -162,17 +111,9 @@ mod tests {
         let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_SHA256);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
 
-        #[cfg(feature = "dynamic-preprocessed-shape")]
-        let max_log_size = 10;
-        #[cfg(feature = "dynamic-preprocessed-shape")]
+        let chunk_log_size = 10;
         let trace = gen_trace(
-            max_log_size,
-            &scheduling_lookup_data,
-            &compression_lookup_data,
-        );
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let trace = gen_trace(
-            LOG_N_SHA256,
+            chunk_log_size,
             &scheduling_lookup_data,
             &compression_lookup_data,
         );
@@ -186,16 +127,10 @@ mod tests {
         let ch_left_cols = &ch_left::gen_column_simd()
             [ChLeftI0Columns::SIZE..(ChLeftI0Columns::SIZE + ChLeftI1Columns::SIZE)];
 
-        #[cfg(feature = "dynamic-preprocessed-shape")]
         let preprocessed_trace = ChLeftI1ColumnsBorrowed::from_slice(ch_left_cols)
             .chunks((1 << simd_size) as usize)
             .into_iter()
             .flat_map(|c| c.iter().map(|c| circle_evaluation_u32x16!(c)))
-            .collect::<Vec<_>>();
-        #[cfg(not(feature = "dynamic-preprocessed-shape"))]
-        let preprocessed_trace = ch_left_cols
-            .iter()
-            .map(|c| circle_evaluation_u32x16!(c))
             .collect::<Vec<_>>();
 
         let traces = TreeVec::new(vec![
