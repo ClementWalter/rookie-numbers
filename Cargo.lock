@@ -512,7 +512,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -742,7 +742,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -815,15 +815,6 @@ name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
-
-[[package]]
-name = "plat"
-version = "7.0.1"
-source = "git+https://github.com/zooko/smalloc#ddd3e55da3c0b198c3193031b4d1cd82661f4223"
-dependencies = [
- "mach-sys",
- "rustix",
-]
 
 [[package]]
 name = "ppv-lite86"
@@ -981,7 +972,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1079,7 +1070,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "smalloc",
+ "smmalloc",
  "stwo",
  "stwo-constraint-framework",
  "test-log",
@@ -1106,29 +1097,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "smalloc"
-version = "7.0.1"
-source = "git+https://github.com/zooko/smalloc#ddd3e55da3c0b198c3193031b4d1cd82661f4223"
-dependencies = [
- "plat",
- "smalloc-macros",
-]
-
-[[package]]
-name = "smalloc-macros"
-version = "0.1.0"
-source = "git+https://github.com/zooko/smalloc#ddd3e55da3c0b198c3193031b4d1cd82661f4223"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.108",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+
+[[package]]
+name = "smmalloc"
+version = "7.6.0"
+source = "git+https://github.com/zooko/smalloc#3efd1e57d557b6ad5fa9846c7c4b6171b3ffa433"
+dependencies = [
+ "mach-sys",
+ "rustix",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "starknet-crypto"

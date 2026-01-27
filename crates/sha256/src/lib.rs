@@ -12,8 +12,13 @@ pub mod preprocessed;
 pub mod relations;
 pub mod sha256;
 
+// Re-export stwo types for external consumers
 #[cfg(feature = "smalloc")]
 use smalloc::Smalloc;
+pub use stwo::{
+    core::{pcs::PcsConfig, proof::StarkProof, vcs::blake2_merkle::Blake2sMerkleHasher},
+    prover::backend::Column,
+};
 #[cfg(feature = "smalloc")]
 #[global_allocator]
 static GLOBAL: Smalloc = Smalloc::new();
@@ -26,7 +31,6 @@ unsafe fn init_smalloc() {
 
 #[cfg(feature = "peak-alloc")]
 use peak_alloc::PeakAlloc;
-use stwo::prover::backend::Column;
 #[cfg(feature = "peak-alloc")]
 #[global_allocator]
 static PEAK_ALLOC: PeakAlloc = PeakAlloc;
@@ -42,10 +46,9 @@ use stwo::{
     core::{
         channel::Blake2sChannel,
         fields::qm31::SecureField,
-        pcs::{CommitmentSchemeVerifier, PcsConfig},
+        pcs::CommitmentSchemeVerifier,
         poly::circle::CanonicCoset,
-        proof::StarkProof,
-        vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher},
+        vcs::blake2_merkle::Blake2sMerkleChannel,
         verifier::{verify, VerificationError},
     },
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
