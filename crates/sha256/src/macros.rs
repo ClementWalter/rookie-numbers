@@ -33,6 +33,7 @@ macro_rules! components {
             $( pub ${concat($module, _, $name)}: Vec<Vec<u32x16>>, )+
         }
 
+        #[derive(Clone, serde::Serialize, serde::Deserialize)]
         pub struct ClaimedSum {
             $( pub ${concat($module, _, $name)}: SecureField, )+
         }
@@ -134,6 +135,10 @@ macro_rules! components {
             }
 
             pub fn provers(&self) -> Vec<&dyn ComponentProver<SimdBackend>> {
+                vec![ $(&self.${concat($module, _, $name)},)+ ]
+            }
+
+            pub fn components(&self) -> Vec<&dyn stwo::core::air::Component> {
                 vec![ $(&self.${concat($module, _, $name)},)+ ]
             }
 

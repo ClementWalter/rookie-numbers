@@ -4,8 +4,7 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::sigma_1::i0_i1::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::Sigma1 as Sigma1Partitions,
-    preprocessed::sigma_1::Sigma1I0I1ColumnsOwned as Sigma1I0I1Columns,
-    preprocessed_log_size,
+    preprocessed::sigma_1::Sigma1I0I1ColumnsOwned as Sigma1I0I1Columns, preprocessed_log_size,
     relations::Relations,
 };
 
@@ -13,7 +12,10 @@ pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
-    let chunk_count = 1 << Sigma1Partitions::I0.count_ones().saturating_sub(effective_log_size);
+    let chunk_count = 1
+        << Sigma1Partitions::I0
+            .count_ones()
+            .saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns {
             sigma_1_i0_mult,

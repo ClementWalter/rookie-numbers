@@ -66,7 +66,9 @@ pub fn gen_trace(
     let effective_log_size = preprocessed_log_size(log_size);
     into_simd(&sigma_1_i0_mult)
         .chunks((1 << (effective_log_size - LOG_N_LANES)) as usize)
-        .zip_eq(into_simd(&sigma_1_i1_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize))
+        .zip_eq(
+            into_simd(&sigma_1_i1_mult).chunks((1 << (effective_log_size - LOG_N_LANES)) as usize),
+        )
         .flat_map(|(i0, i1)| [i0.to_vec(), i1.to_vec()])
         .collect()
 }

@@ -4,10 +4,9 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::big_sigma_1::i0::columns::ComponentColumnsOwned,
     partitions::BigSigma1 as BigSigma1Partitions,
-    preprocessed::big_sigma_1::BigSigma1I0ColumnsOwned,
+    preprocessed::big_sigma_1::BigSigma1I0ColumnsOwned, preprocessed_log_size,
     relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 

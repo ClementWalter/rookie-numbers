@@ -20,15 +20,14 @@ use utils::{aligned_vec, combine, simd::into_simd, write_pair};
 
 use crate::{
     components::{
-        compression::columns::RoundInteractionColumns as CompressionInteractionColumns,
-        W_SIZE,
+        compression::columns::RoundInteractionColumns as CompressionInteractionColumns, W_SIZE,
     },
     partitions::{pext_u32x16, BigSigma1},
     preprocessed::ch_left::{self, ChLeftColumns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
 };
-use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,

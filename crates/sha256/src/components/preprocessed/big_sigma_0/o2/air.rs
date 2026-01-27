@@ -5,15 +5,15 @@ use crate::{
     components::preprocessed::big_sigma_0::o2::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma0 as BigSigma0Partitions,
     preprocessed::big_sigma_0::BigSigma0O2ColumnsOwned as BigSigma0O2Columns,
-    relations::Relations,
+    preprocessed_log_size, relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
-    let chunk_count = 1 << (BigSigma0Partitions::O2.count_ones() * 2).saturating_sub(effective_log_size);
+    let chunk_count =
+        1 << (BigSigma0Partitions::O2.count_ones() * 2).saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumns { o2_mult } = ComponentColumns::<<E as EvalAtRow>::F>::from_eval(eval);
         let suffix = if chunk_count == 1 { None } else { Some(chunk) };
@@ -72,9 +72,10 @@ mod tests {
             preprocessed::big_sigma_0::o2::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::big_sigma_0::{self, BigSigma0I0I1Columns},
+        preprocessed::big_sigma_0::{
+            self, BigSigma0I0I1Columns, BigSigma0O2Columns as BigSigma0O2ColumnsBorrowed,
+        },
     };
-    use crate::preprocessed::big_sigma_0::BigSigma0O2Columns as BigSigma0O2ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {
@@ -100,8 +101,8 @@ mod tests {
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&trace, &relations);
 
         let preprocessed_trace = {
-            let big_sigma_0_o2_cols = &big_sigma_0_cols
-                [BigSigma0I0I1Columns::SIZE..(BigSigma0I0I1Columns::SIZE + BigSigma0O2Columns::SIZE)];
+            let big_sigma_0_o2_cols = &big_sigma_0_cols[BigSigma0I0I1Columns::SIZE
+                ..(BigSigma0I0I1Columns::SIZE + BigSigma0O2Columns::SIZE)];
             BigSigma0O2ColumnsBorrowed::from_slice(big_sigma_0_o2_cols)
                 .chunks((1 << simd_size) as usize)
                 .into_iter()

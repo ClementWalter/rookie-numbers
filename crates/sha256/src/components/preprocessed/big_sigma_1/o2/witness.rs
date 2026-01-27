@@ -9,12 +9,12 @@ use stwo::{
     prover::{
         backend::simd::{
             m31::{PackedM31, LOG_N_LANES},
+            qm31::PackedQM31,
             SimdBackend,
         },
         poly::{circle::CircleEvaluation, BitReversedOrder},
     },
 };
-use stwo::prover::backend::simd::qm31::PackedQM31;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 use utils::{aligned_vec, combine, simd::into_simd, write_col, write_pair};
 
@@ -24,10 +24,10 @@ use crate::{
     },
     partitions::BigSigma1,
     preprocessed::big_sigma_1::{self, BigSigma1Columns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::N_COMPRESSION_ROUNDS,
 };
-use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,

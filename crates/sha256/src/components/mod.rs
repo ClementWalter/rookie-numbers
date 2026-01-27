@@ -1,5 +1,6 @@
 use std::simd::u32x16;
 
+use serde::{Deserialize, Serialize};
 use stwo::{
     core::{
         air::Component,
@@ -36,6 +37,7 @@ pub struct LookupData {
     pub preprocessed: preprocessed::Traces,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ClaimedSum {
     pub scheduling: SecureField,
     pub compression: SecureField,
@@ -168,6 +170,13 @@ impl Components {
             vec![&self.scheduling, &self.compression];
         provers.extend(self.preprocessed.provers());
         provers
+    }
+
+    pub fn components(&self) -> Vec<&dyn stwo::core::air::Component> {
+        let mut components: Vec<&dyn stwo::core::air::Component> =
+            vec![&self.scheduling, &self.compression];
+        components.extend(self.preprocessed.components());
+        components
     }
 
     pub fn track_relations<MC: MerkleChannel>(

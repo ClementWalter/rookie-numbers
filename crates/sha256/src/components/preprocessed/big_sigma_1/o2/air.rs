@@ -4,16 +4,16 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::big_sigma_1::o2::columns::ComponentColumnsOwned,
     partitions::BigSigma1 as BigSigma1Partitions,
-    preprocessed::big_sigma_1::BigSigma1O2ColumnsOwned,
+    preprocessed::big_sigma_1::BigSigma1O2ColumnsOwned, preprocessed_log_size,
     relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
 fn eval_constraints<E: EvalAtRow>(eval: &mut E, relations: &Relations, log_size: u32) {
     let effective_log_size = preprocessed_log_size(log_size);
-    let chunk_count = 1 << (BigSigma1Partitions::O2.count_ones() * 2).saturating_sub(effective_log_size);
+    let chunk_count =
+        1 << (BigSigma1Partitions::O2.count_ones() * 2).saturating_sub(effective_log_size);
     for chunk in 0..chunk_count {
         let ComponentColumnsOwned { o2_mult } =
             ComponentColumnsOwned::<<E as EvalAtRow>::F>::from_eval(eval);
