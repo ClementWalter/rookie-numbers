@@ -5,9 +5,8 @@ use crate::{
     components::preprocessed::big_sigma_0::i0_i1::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma0 as BigSigma0Partitions,
     preprocessed::big_sigma_0::BigSigma0I0I1ColumnsOwned as BigSigma0I0I1Columns,
-    relations::Relations,
+    preprocessed_log_size, relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 const _: () = assert!(
     BigSigma0Partitions::I0.count_ones() == BigSigma0Partitions::I1.count_ones(),
@@ -107,9 +106,10 @@ mod tests {
             preprocessed::big_sigma_0::i0_i1::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::big_sigma_0,
+        preprocessed::{
+            big_sigma_0, big_sigma_0::BigSigma0I0I1Columns as BigSigma0I0I1ColumnsBorrowed,
+        },
     };
-    use crate::preprocessed::big_sigma_0::BigSigma0I0I1Columns as BigSigma0I0I1ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

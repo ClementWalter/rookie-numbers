@@ -24,10 +24,10 @@ use crate::{
         scheduling::columns::RoundInteractionColumns as SchedulingInteractionColumns, W_SIZE,
     },
     preprocessed::range_check_add::{self, RangeCheckAddColumns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::{N_COMPRESSION_ROUNDS, N_SCHEDULING_ROUNDS},
 };
-use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,
@@ -165,4 +165,3 @@ pub fn gen_interaction_trace(
 
     interaction_trace.finalize_last()
 }
-

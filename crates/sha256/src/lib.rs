@@ -42,10 +42,11 @@ use stwo::{
     core::{
         channel::Blake2sChannel,
         fields::qm31::SecureField,
-        pcs::PcsConfig,
+        pcs::{CommitmentSchemeVerifier, PcsConfig},
         poly::circle::CanonicCoset,
         proof::StarkProof,
         vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher},
+        verifier::{verify, VerificationError},
     },
     prover::{backend::simd::SimdBackend, poly::circle::PolyOps, prove, CommitmentSchemeProver},
 };
@@ -85,7 +86,10 @@ pub fn preprocessed_log_size(log_size: u32) -> u32 {
 #[cfg(not(feature = "dynamic-preprocessed-shape"))]
 const TWIDDLES_LOG_SIZE: u32 = 21;
 
-pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkleHasher> {
+pub fn prove_sha256(
+    log_size: u32,
+    config: PcsConfig,
+) -> (StarkProof<Blake2sMerkleHasher>, components::ClaimedSum) {
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     #[cfg(feature = "dynamic-preprocessed-shape")]
@@ -196,7 +200,96 @@ pub fn prove_sha256(log_size: u32, config: PcsConfig) -> StarkProof<Blake2sMerkl
     }
     span.exit();
 
-    proof.unwrap()
+    (proof.unwrap(), claimed_sum)
+}
+
+/// Verify a SHA256 proof.
+///
+/// # Arguments
+/// * `proof` - The STARK proof to verify
+/// * `log_size` - The log2 of the number of SHA256 instances
+/// * `claimed_sum` - The claimed sums from the prover
+///
+/// # Returns
+/// * `Ok(())` if the proof is valid
+/// * `Err(VerificationError)` if the proof is invalid
+pub fn verify_sha256(
+    proof: StarkProof<Blake2sMerkleHasher>,
+    log_size: u32,
+    claimed_sum: &components::ClaimedSum,
+) -> Result<(), VerificationError> {
+    // Verify that claimed sums sum to zero (logup protocol constraint)
+    if claimed_sum.scheduling + claimed_sum.compression + claimed_sum.preprocessed.sum()
+        != SecureField::zero()
+    {
+        return Err(VerificationError::OodsNotMatching);
+    }
+
+    // Setup verification protocol (mirror of prover setup)
+    let channel = &mut Blake2sChannel::default();
+    let commitment_scheme =
+        &mut CommitmentSchemeVerifier::<Blake2sMerkleChannel>::new(proof.config);
+
+    // Get preprocessed column IDs for trace allocation
+    let preprocessed_trace = PreProcessedTrace::new(log_size);
+
+    // Commit preprocessed trace (tree 0)
+    // Get sizes from the preprocessed trace
+    let preprocessed_sizes: Vec<u32> = preprocessed_trace
+        .trace
+        .iter()
+        .map(|eval| eval.domain.log_size())
+        .collect();
+    commitment_scheme.commit(proof.commitments[0], &preprocessed_sizes, channel);
+
+    // Create components to get trace sizes (need relations for component creation)
+    // Use dummy values for claimed_sum fields since we only need sizes
+    let trace_allocator =
+        &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids);
+    let dummy_relations = Relations::draw(&mut Blake2sChannel::default());
+    let temp_components =
+        components::Components::new(log_size, trace_allocator, &dummy_relations, claimed_sum);
+
+    // Get trace log degree bounds from all components
+    let all_bounds = temp_components.trace_log_degree_bounds();
+
+    // Collect sizes for trace tree (tree 1) - all columns from all components
+    let mut trace_sizes: Vec<u32> = Vec::new();
+    for component_bounds in &all_bounds {
+        if component_bounds.len() > 1 {
+            trace_sizes.extend(&component_bounds[1]);
+        }
+    }
+
+    // Commit main trace (tree 1)
+    commitment_scheme.commit(proof.commitments[1], &trace_sizes, channel);
+
+    // Draw relations AFTER trace commit (must match prover order)
+    let relations = Relations::draw(channel);
+
+    // Recreate components with correct relations
+    let trace_allocator =
+        &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_trace.ids);
+    let components =
+        components::Components::new(log_size, trace_allocator, &relations, claimed_sum);
+    let all_bounds = components.trace_log_degree_bounds();
+
+    // Collect sizes for interaction tree (tree 2)
+    let mut interaction_sizes: Vec<u32> = Vec::new();
+    for component_bounds in &all_bounds {
+        if component_bounds.len() > 2 {
+            interaction_sizes.extend(&component_bounds[2]);
+        }
+    }
+
+    // Commit interaction trace (tree 2)
+    commitment_scheme.commit(proof.commitments[2], &interaction_sizes, channel);
+
+    // Get all components for verification
+    let component_refs: Vec<&dyn stwo::core::air::Component> = components.components();
+
+    // Verify the proof
+    verify(&component_refs, channel, commitment_scheme, proof)
 }
 
 pub fn print_enabled_features() {
@@ -267,5 +360,22 @@ mod tests {
             let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
             info!("Peak memory: {} MB", peak_bytes);
         }
+    }
+
+    #[test_log::test]
+    fn test_prove_verify_roundtrip() {
+        print_enabled_features();
+
+        let log_size = 8; // Small size for fast testing
+        info!("Testing prove/verify roundtrip with log_size={}", log_size);
+
+        // Prove
+        let (proof, claimed_sum) = prove_sha256(log_size, PcsConfig::default());
+        info!("Proof generated successfully");
+
+        // Verify
+        let result = verify_sha256(proof, log_size, &claimed_sum);
+        assert!(result.is_ok(), "Verification failed: {:?}", result.err());
+        info!("Proof verified successfully");
     }
 }

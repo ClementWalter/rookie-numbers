@@ -4,10 +4,9 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::ch_right::i0::columns::ComponentColumnsOwned as ComponentColumns,
     partitions::BigSigma1 as BigSigma1Partitions,
-    preprocessed::ch_right::ChRightI0ColumnsOwned as ChRightI0Columns,
+    preprocessed::ch_right::ChRightI0ColumnsOwned as ChRightI0Columns, preprocessed_log_size,
     relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 const _: () = assert!(
     BigSigma1Partitions::I0_L.count_ones() == BigSigma1Partitions::I0_H.count_ones(),
@@ -98,9 +97,8 @@ mod tests {
             preprocessed::ch_right::i0::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::ch_right,
+        preprocessed::{ch_right, ch_right::ChRightI0Columns as ChRightI0ColumnsBorrowed},
     };
-    use crate::preprocessed::ch_right::ChRightI0Columns as ChRightI0ColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

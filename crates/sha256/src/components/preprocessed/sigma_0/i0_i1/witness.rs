@@ -24,10 +24,10 @@ use crate::{
     },
     partitions::{pext_u32x16, Sigma0},
     preprocessed::sigma_0::{self, Sigma0Columns},
+    preprocessed_log_size,
     relations::Relations,
     sha256::N_SCHEDULING_ROUNDS,
 };
-use crate::preprocessed_log_size;
 
 pub fn gen_trace(
     log_size: u32,

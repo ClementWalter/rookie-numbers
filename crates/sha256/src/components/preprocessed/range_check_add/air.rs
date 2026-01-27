@@ -4,9 +4,8 @@ use utils::add_to_relation;
 use crate::{
     components::preprocessed::range_check_add::columns::ComponentColumnsOwned as ComponentColumns,
     preprocessed::range_check_add::RangeCheckAddColumnsOwned as RangeCheckAddColumns,
-    relations::Relations,
+    preprocessed_log_size, relations::Relations,
 };
-use crate::preprocessed_log_size;
 
 pub type Component = FrameworkComponent<Eval>;
 
@@ -86,9 +85,10 @@ mod tests {
             preprocessed::range_check_add::witness::{gen_interaction_trace, gen_trace},
             scheduling::witness::gen_trace as gen_scheduling_trace,
         },
-        preprocessed::range_check_add,
+        preprocessed::{
+            range_check_add, range_check_add::RangeCheckAddColumns as RangeCheckAddColumnsBorrowed,
+        },
     };
-    use crate::preprocessed::range_check_add::RangeCheckAddColumns as RangeCheckAddColumnsBorrowed;
 
     #[test_log::test]
     fn test_constraints() {

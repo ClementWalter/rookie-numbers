@@ -1,2 +1,3 @@
 /target
 tsc-cache
+.claude/cache/

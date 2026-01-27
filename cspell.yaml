@@ -1,6 +1,7 @@
 version: "0.2"
 suggestionsTimeout: 5000
 words:
+  - arithm
   - bitmask
   - bytemuck
   - clippy
@@ -18,6 +19,7 @@ words:
   - metavar
   - mimalloc
   - mult
+  - oods
   - papini
   - pext
   - repr
@@ -30,3 +32,4 @@ words:
   - stwo
   - thiserror
   - tikv
+  - zkvm
