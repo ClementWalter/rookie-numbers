@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+
+    hooks:
+      - id: trunk
+        name: Trunk check
+        language: system
+        pass_filenames: false
+        entry: trunk check --fix
+
+      - id: cargo-test
+        name: Cargo test (release)
+        language: system
+        pass_filenames: false
+        entry: cargo t -r
