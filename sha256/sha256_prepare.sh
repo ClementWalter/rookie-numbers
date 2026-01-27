@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # Prepare SHA256 STWO prover state for csp-benchmarks
-set -euo pipefail
+set -eo pipefail
+
+# Check required environment variables
+if [[ -z "${INPUT_SIZE:-}" ]]; then
+    echo "Error: INPUT_SIZE environment variable is required" >&2
+    echo "Usage: INPUT_SIZE=128 STATE_JSON=/tmp/state.json $0" >&2
+    exit 1
+fi
+
+if [[ -z "${STATE_JSON:-}" ]]; then
+    echo "Error: STATE_JSON environment variable is required" >&2
+    echo "Usage: INPUT_SIZE=128 STATE_JSON=/tmp/state.json $0" >&2
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY="$SCRIPT_DIR/../target/release/sha256_prover"
