@@ -170,7 +170,7 @@ fn cmd_prove(state_json: PathBuf) -> Result<()> {
 
     // Generate proof
     sha256::print_enabled_features();
-    let (actual_log_size, proof, claimed_sum) = prove_sha256(&input, PcsConfig::default());
+    let (proof, actual_log_size, claimed_sum) = prove_sha256(&input, PcsConfig::default());
     state.log_size = actual_log_size; // Update with actual log_size
 
     // Serialize proof

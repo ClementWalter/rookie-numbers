@@ -101,7 +101,7 @@ const TWIDDLES_LOG_SIZE: u32 = 21;
 pub fn prove_sha256(
     input: &[u8],
     config: PcsConfig,
-) -> (u32, StarkProof<Blake2sMerkleHasher>, components::ClaimedSum) {
+) -> (StarkProof<Blake2sMerkleHasher>, u32, components::ClaimedSum) {
     // Pad the input message according to SHA-256 rules
     let chunks = pad_message(input);
 
@@ -219,7 +219,7 @@ pub fn prove_sha256(
     }
     span.exit();
 
-    (log_size, proof.expect("proof should be valid"), claimed_sum)
+    (proof.expect("proof should be valid"), log_size, claimed_sum)
 }
 
 /// Verify a SHA256 proof.
@@ -345,7 +345,7 @@ mod tests {
         info!("Testing prove with input: {:?}", std::str::from_utf8(input));
 
         let start = Instant::now();
-        let (log_size, _proof, _claimed_sum) = prove_sha256(input, PcsConfig::default());
+        let (_proof, log_size, _claimed_sum) = prove_sha256(input, PcsConfig::default());
         info!(
             "Proof generated in {:?}, log_size={}",
             start.elapsed(),
@@ -364,7 +364,7 @@ mod tests {
         );
 
         // Prove
-        let (log_size, proof, claimed_sum) = prove_sha256(input, PcsConfig::default());
+        let (proof, log_size, claimed_sum) = prove_sha256(input, PcsConfig::default());
         info!("Proof generated successfully, log_size={}", log_size);
 
         // Verify
@@ -381,7 +381,7 @@ mod tests {
         info!("Testing prove/verify with empty input");
 
         // Prove
-        let (log_size, proof, claimed_sum) = prove_sha256(input, PcsConfig::default());
+        let (proof, log_size, claimed_sum) = prove_sha256(input, PcsConfig::default());
         info!("Proof generated successfully, log_size={}", log_size);
 
         // Verify
@@ -399,7 +399,7 @@ mod tests {
         info!("Testing prove/verify with {} byte input", input.len());
 
         // Prove
-        let (log_size, proof, claimed_sum) = prove_sha256(&input, PcsConfig::default());
+        let (proof, log_size, claimed_sum) = prove_sha256(&input, PcsConfig::default());
         info!("Proof generated successfully, log_size={}", log_size);
 
         // Verify
