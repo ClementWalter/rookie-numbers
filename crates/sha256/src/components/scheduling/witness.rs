@@ -16,7 +16,7 @@ use stwo::{
     },
 };
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use utils::{combine, consume_pair, emit_col, simd::generate_simd_sequence_bulk};
+use utils::{combine, consume_pair, emit_col};
 
 use crate::{
     components::{
@@ -25,21 +25,34 @@ use crate::{
     },
     partitions::{pext_u32x16, Sigma0, Sigma1},
     relations::Relations,
-    sha256::{small_sigma_0_u32x16, small_sigma_1_u32x16, CHUNK_SIZE, N_SCHEDULING_ROUNDS},
+    sha256::{small_sigma_0_u32x16, small_sigma_1_u32x16, N_SCHEDULING_ROUNDS},
 };
 
 const N_COLUMNS: usize = W_SIZE + RoundColumns::SIZE * N_SCHEDULING_ROUNDS;
 const N_INTERACTION_COLUMNS: usize = W_SIZE + RoundInteractionColumns::SIZE * N_SCHEDULING_ROUNDS;
 
+/// Generate the scheduling trace from input chunks.
+///
+/// # Arguments
+/// * `chunks` - The 512-bit message chunks, each as `[u32; 16]` in big-endian format.
+///
+/// # Returns
+/// A tuple of (log_size, trace, lookup_data) where log_size is the computed power of 2 size.
 #[allow(clippy::type_complexity)]
 pub fn gen_trace(
-    log_size: u32,
+    chunks: &[[u32; 16]],
 ) -> (
+    u32,
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     Vec<Vec<u32x16>>,
 ) {
-    assert!(log_size >= LOG_N_LANES);
-    let simd_size = 1 << (log_size - LOG_N_LANES);
+    assert!(!chunks.is_empty(), "chunks must not be empty");
+
+    // Compute log_size: round up chunk count to next power of 2, minimum LOG_N_LANES
+    let n_chunks = chunks.len();
+    let log_size = (n_chunks.next_power_of_two().ilog2()).max(LOG_N_LANES);
+    let size = 1 << log_size;
+    let simd_size = size / 16; // Each u32x16 holds 16 values
 
     // Initialize vec for all groups of columns
     let mut evals: Vec<Vec<u32x16>> = (0..N_COLUMNS)
@@ -49,21 +62,36 @@ pub fn gen_trace(
         .map(|_| Vec::with_capacity(simd_size))
         .collect::<Vec<_>>();
 
-    // Generate random inputs
-    evals
-        .iter_mut()
-        .enumerate()
-        .take(CHUNK_SIZE)
-        .for_each(|(i, eval)| {
-            *eval = generate_simd_sequence_bulk(i, 1 << log_size);
-        });
-    lookup_data
-        .iter_mut()
-        .enumerate()
-        .take(CHUNK_SIZE)
-        .for_each(|(i, eval)| {
-            *eval = generate_simd_sequence_bulk(i, 1 << log_size);
-        });
+    // Convert chunks to W[0..16] columns (each u32 split into low/high u16)
+    // Pad with zeros if we have fewer chunks than the power-of-2 size
+    for w_idx in 0..16 {
+        let low_col_idx = 2 * w_idx;
+        let high_col_idx = 2 * w_idx + 1;
+
+        // Build vectors of u32 values for this W position across all rows
+        let mut low_values: Vec<u32> = Vec::with_capacity(size);
+        let mut high_values: Vec<u32> = Vec::with_capacity(size);
+
+        for row in 0..size {
+            let value = chunks.get(row).map_or(0, |chunk| chunk[w_idx]);
+            low_values.push(value & 0xffff);
+            high_values.push(value >> 16);
+        }
+
+        // Convert to SIMD vectors
+        evals[low_col_idx] = low_values
+            .chunks_exact(16)
+            .map(|chunk| u32x16::from_slice(chunk))
+            .collect();
+        evals[high_col_idx] = high_values
+            .chunks_exact(16)
+            .map(|chunk| u32x16::from_slice(chunk))
+            .collect();
+
+        // Copy to lookup_data as well
+        lookup_data[low_col_idx] = evals[low_col_idx].clone();
+        lookup_data[high_col_idx] = evals[high_col_idx].clone();
+    }
 
     for t in 16..(16 + N_SCHEDULING_ROUNDS) {
         let index = W_SIZE + (t - 16) * RoundColumns::SIZE;
@@ -229,7 +257,7 @@ pub fn gen_trace(
         })
         .collect();
 
-    (trace, lookup_data)
+    (log_size, trace, lookup_data)
 }
 
 pub fn gen_interaction_trace(
@@ -359,19 +387,34 @@ mod tests {
     use stwo::prover::backend::Column;
 
     use super::*;
-    use crate::sha256::{small_sigma_0, small_sigma_1};
+    use crate::sha256::{pad_message, small_sigma_0, small_sigma_1};
+
+    /// Create test chunks for a given size
+    fn create_test_chunks(n: usize) -> Vec<[u32; 16]> {
+        (0..n)
+            .map(|i| std::array::from_fn(|j| (i * 16 + j) as u32))
+            .collect()
+    }
 
     #[test]
     fn test_gen_trace_columns_count() {
-        let (trace, _) = gen_trace(LOG_N_LANES + 3);
+        // Create enough chunks to get log_size = LOG_N_LANES + 3
+        let n_chunks = 1 << (LOG_N_LANES + 3);
+        let chunks = create_test_chunks(n_chunks as usize);
+        let (log_size, trace, _) = gen_trace(&chunks);
+        assert_eq!(log_size, LOG_N_LANES + 3);
         assert_eq!(trace.len(), N_COLUMNS);
     }
 
     #[test]
     fn test_gen_trace_values() {
-        let log_size = LOG_N_LANES;
+        // Use minimum size (LOG_N_LANES = 4, so 16 chunks)
+        let n_chunks = 1 << LOG_N_LANES;
+        let chunks = create_test_chunks(n_chunks as usize);
+        let (log_size, mut trace, _) = gen_trace(&chunks);
+        assert_eq!(log_size, LOG_N_LANES);
+
         let size = 1 << log_size;
-        let (mut trace, _) = gen_trace(log_size);
         let w = trace
             .drain(0..W_SIZE)
             .map(|eval| {
@@ -408,5 +451,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_gen_trace_with_real_message() {
+        // Test with actual padded message
+        let chunks = pad_message(b"hello world");
+        assert_eq!(chunks.len(), 1);
+
+        let (log_size, trace, _) = gen_trace(&chunks);
+        assert_eq!(log_size, LOG_N_LANES); // Minimum size
+
+        // Verify trace has correct number of columns
+        assert_eq!(trace.len(), N_COLUMNS);
+    }
+
+    #[test]
+    fn test_gen_trace_padding() {
+        // Test that single chunk gets padded to LOG_N_LANES rows
+        let chunks = vec![[0u32; 16]];
+        let (log_size, _, _) = gen_trace(&chunks);
+        assert_eq!(log_size, LOG_N_LANES); // Should be minimum LOG_N_LANES
     }
 }

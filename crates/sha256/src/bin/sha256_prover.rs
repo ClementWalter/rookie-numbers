@@ -156,11 +156,22 @@ fn cmd_prove(state_json: PathBuf) -> Result<()> {
     let mut state: BenchmarkState =
         serde_json::from_str(&state_content).context("Failed to parse state JSON")?;
 
-    info!("Proving with log_size={}", state.log_size);
+    info!("Proving with target log_size={}", state.log_size);
+
+    // Generate synthetic input bytes that will produce the required number of chunks
+    // Each chunk is 64 bytes, and we need 2^log_size chunks
+    // However, padding adds 1 byte (0x80) + padding + 8 bytes (length)
+    // For simplicity, create input that produces exactly 2^log_size chunks
+    let n_chunks = 1_usize << state.log_size;
+    // Each chunk is 64 bytes. To get n_chunks, we need (n_chunks * 64 - 9) bytes of input
+    // (since padding adds 1 + padding + 8 = at least 9 bytes)
+    let input_len = n_chunks * 64 - 9;
+    let input = vec![0xab_u8; input_len];
 
     // Generate proof
     sha256::print_enabled_features();
-    let (proof, claimed_sum) = prove_sha256(state.log_size, PcsConfig::default());
+    let (actual_log_size, proof, claimed_sum) = prove_sha256(&input, PcsConfig::default());
+    state.log_size = actual_log_size; // Update with actual log_size
 
     // Serialize proof
     let proof_bytes = bincode::serialize(&proof).context("Failed to serialize proof")?;

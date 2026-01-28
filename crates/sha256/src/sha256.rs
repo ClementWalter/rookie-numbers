@@ -181,6 +181,44 @@ pub fn process_chunk(chunk: [u32; 16], mut hash: [u32; 8]) -> [u32; 8] {
     hash
 }
 
+/// Pad a message according to SHA-256 padding rules.
+///
+/// SHA-256 padding:
+/// 1. Append a single 0x80 byte (bit "1" followed by 7 zeros)
+/// 2. Append zero bytes until the message length in bytes is congruent to 56 (mod 64)
+/// 3. Append the original message length in bits as a big-endian 64-bit integer
+///
+/// # Arguments
+/// * `input` - The message bytes to pad
+///
+/// # Returns
+/// A vector of 512-bit chunks, each represented as `[u32; 16]` in big-endian format.
+pub fn pad_message(input: &[u8]) -> Vec<[u32; 16]> {
+    let mut msg = input.to_vec();
+    msg.push(0x80);
+
+    // Pad to 56 mod 64 (leaving 8 bytes for the length)
+    while (msg.len() % 64) != 56 {
+        msg.push(0x00);
+    }
+
+    // Append 64-bit length in bits as big-endian
+    let bit_len = (input.len() as u64) * 8;
+    msg.extend_from_slice(&bit_len.to_be_bytes());
+
+    // Convert to chunks of [u32; 16]
+    msg.chunks_exact(64)
+        .map(|chunk| {
+            std::array::from_fn(|i| {
+                let bytes: [u8; 4] = chunk[4 * i..4 * i + 4]
+                    .try_into()
+                    .expect("chunk is 64 bytes");
+                u32::from_be_bytes(bytes)
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use itertools::izip;
@@ -191,34 +229,98 @@ mod tests {
     fn test_reference_implementation() {
         use sha2::{Digest, Sha256};
 
-        use crate::sha256::{process_chunk, H};
+        use crate::sha256::{pad_message, process_chunk, H};
 
         let input = b"hello world";
 
         // Reference result using sha2 crate
         let reference = Sha256::digest(input);
 
-        // Build padded "hello world" message (11 bytes)
-        let mut msg = Vec::from(input);
-        msg.push(0x80);
-        while !(msg.len() + 8).is_multiple_of(64) {
-            msg.push(0x00);
-        }
-        let bit_len: u64 = input.len() as u64 * 8;
-        msg.extend_from_slice(&bit_len.to_be_bytes());
-        assert_eq!(msg.len(), 64);
+        // Use pad_message to get chunks
+        let chunks = pad_message(input);
+        assert_eq!(chunks.len(), 1); // "hello world" fits in one chunk
 
-        // Convert bytes to [u32; 16]
-        let mut chunk = [0u32; 16];
-        for (i, word) in chunk.iter_mut().enumerate() {
-            let bytes: [u8; 4] = msg[4 * i..4 * i + 4].try_into().unwrap();
-            *word = u32::from_be_bytes(bytes);
+        // Process all chunks
+        let mut hash = H;
+        for chunk in chunks {
+            hash = process_chunk(chunk, hash);
         }
-
-        // Process single chunk
-        let hash = process_chunk(chunk, H);
 
         // Convert [u32; 8] hash state to [u8; 32]
+        let mut result = [0u8; 32];
+        for (i, word) in hash.iter().enumerate() {
+            result[4 * i..4 * i + 4].copy_from_slice(&word.to_be_bytes());
+        }
+
+        assert_eq!(reference[..], result[..]);
+    }
+
+    #[test]
+    fn test_pad_message_empty() {
+        // Empty message should produce one chunk
+        let chunks = pad_message(b"");
+        assert_eq!(chunks.len(), 1);
+
+        // First byte should be 0x80, rest zeros except last 8 bytes (length = 0)
+        assert_eq!(chunks[0][0], 0x80000000);
+        for i in 1..14 {
+            assert_eq!(chunks[0][i], 0);
+        }
+        // Length is 0 bits
+        assert_eq!(chunks[0][14], 0);
+        assert_eq!(chunks[0][15], 0);
+    }
+
+    #[test]
+    fn test_pad_message_55_bytes() {
+        // 55 bytes exactly fits in one chunk (55 + 1 + 8 = 64)
+        let input = [0u8; 55];
+        let chunks = pad_message(&input);
+        assert_eq!(chunks.len(), 1);
+
+        // Last word should contain the length (55 * 8 = 440 bits = 0x1b8)
+        assert_eq!(chunks[0][15], 440);
+    }
+
+    #[test]
+    fn test_pad_message_56_bytes() {
+        // 56 bytes needs two chunks (56 + 1 = 57, need padding to 64, then 8 more for length)
+        let input = [0u8; 56];
+        let chunks = pad_message(&input);
+        assert_eq!(chunks.len(), 2);
+
+        // Length should be in the second chunk (56 * 8 = 448 bits = 0x1c0)
+        assert_eq!(chunks[1][15], 448);
+    }
+
+    #[test]
+    fn test_pad_message_64_bytes() {
+        // 64 bytes needs two chunks
+        let input = [0u8; 64];
+        let chunks = pad_message(&input);
+        assert_eq!(chunks.len(), 2);
+
+        // Length should be 64 * 8 = 512 bits = 0x200
+        assert_eq!(chunks[1][15], 512);
+    }
+
+    #[test]
+    fn test_pad_message_multi_chunk() {
+        use sha2::{Digest, Sha256};
+
+        // Test with a message that requires multiple chunks
+        let input = [0xab_u8; 100]; // 100 bytes needs 2 chunks
+
+        let reference = Sha256::digest(input);
+
+        let chunks = pad_message(&input);
+        assert_eq!(chunks.len(), 2);
+
+        let mut hash = H;
+        for chunk in chunks {
+            hash = process_chunk(chunk, hash);
+        }
+
         let mut result = [0u8; 32];
         for (i, word) in hash.iter().enumerate() {
             result[4 * i..4 * i + 4].copy_from_slice(&word.to_be_bytes());

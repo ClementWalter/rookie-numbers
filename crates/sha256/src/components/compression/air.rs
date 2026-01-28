@@ -404,12 +404,21 @@ mod tests {
         scheduling::witness::gen_trace as gen_scheduling_trace,
     };
 
+    /// Create test chunks for a given log_size
+    fn create_test_chunks(log_size: u32) -> Vec<[u32; 16]> {
+        let n = 1 << log_size;
+        (0..n)
+            .map(|i| std::array::from_fn(|j| (i * 16 + j) as u32))
+            .collect()
+    }
+
     #[test]
     fn test_compression_constraints() {
         const LOG_N_ROWS: u32 = 4;
 
         // Trace.
-        let (scheduling_trace, _) = gen_scheduling_trace(LOG_N_ROWS);
+        let chunks = create_test_chunks(LOG_N_ROWS);
+        let (_log_size, scheduling_trace, _) = gen_scheduling_trace(&chunks);
         let (trace, lookup_data) = gen_trace(&scheduling_trace);
 
         let relations = Relations::dummy();

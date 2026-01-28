@@ -816,17 +816,27 @@ mod tests {
         sha256::{process_chunk_u32x16, CHUNK_SIZE},
     };
 
+    /// Create test chunks for a given size
+    fn create_test_chunks(n: usize) -> Vec<[u32; 16]> {
+        (0..n)
+            .map(|i| std::array::from_fn(|j| (i * 16 + j) as u32))
+            .collect()
+    }
+
     #[test]
     fn test_gen_trace_columns_count() {
-        let (schedule, _) = gen_schedule(LOG_N_LANES);
+        let n_chunks = 1 << LOG_N_LANES;
+        let chunks = create_test_chunks(n_chunks as usize);
+        let (_log_size, schedule, _) = gen_schedule(&chunks);
         let (trace, _) = gen_trace(&schedule);
         assert_eq!(trace.len(), N_COLUMNS);
     }
 
     #[test]
     fn test_gen_trace_values() {
-        let log_size = LOG_N_LANES;
-        let (schedule, _) = gen_schedule(log_size);
+        let n_chunks = 1 << LOG_N_LANES;
+        let chunks = create_test_chunks(n_chunks as usize);
+        let (_log_size, schedule, _) = gen_schedule(&chunks);
         let (trace, _) = gen_trace(&schedule);
         let chunk = trace[0..CHUNK_SIZE]
             .iter()

@@ -44,17 +44,26 @@ pub struct ClaimedSum {
     pub preprocessed: preprocessed::ClaimedSum,
 }
 
+/// Generate the full trace from input chunks.
+///
+/// # Arguments
+/// * `chunks` - The 512-bit message chunks, each as `[u32; 16]` in big-endian format.
+///
+/// # Returns
+/// A tuple of (log_size, trace, lookup_data) where log_size is the computed power of 2 size.
 pub fn gen_trace(
-    log_size: u32,
+    chunks: &[[u32; 16]],
 ) -> (
+    u32,
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     LookupData,
 ) {
-    assert!(log_size >= LOG_N_LANES);
-
     let span = span!(Level::INFO, "Scheduling").entered();
-    let (scheduling_trace, scheduling_lookup_data) = scheduling::witness::gen_trace(log_size);
+    let (log_size, scheduling_trace, scheduling_lookup_data) =
+        scheduling::witness::gen_trace(chunks);
     span.exit();
+
+    assert!(log_size >= LOG_N_LANES);
 
     let span = span!(Level::INFO, "Compression").entered();
     let (compression_trace, compression_lookup_data) =
@@ -80,7 +89,7 @@ pub fn gen_trace(
     trace.extend(compression_trace);
     trace.extend(preprocessed_trace);
 
-    (trace, lookup_data)
+    (log_size, trace, lookup_data)
 }
 
 pub fn gen_interaction_trace(

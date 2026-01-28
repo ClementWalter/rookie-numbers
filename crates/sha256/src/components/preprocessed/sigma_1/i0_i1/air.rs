@@ -107,7 +107,10 @@ mod tests {
 
         // Trace.
 
-        let (scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(LOG_N_ROWS);
+        let chunks: Vec<[u32; 16]> = (0..(1 << LOG_N_ROWS))
+            .map(|i| std::array::from_fn(|j| (i * 16 + j) as u32))
+            .collect();
+        let (_log_size, scheduling_trace, scheduling_lookup_data) = gen_scheduling_trace(&chunks);
         let (_, compression_lookup_data) = gen_compression_trace(&scheduling_trace);
         let max_log_size = 10;
         let trace = gen_trace(

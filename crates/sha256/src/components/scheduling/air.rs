@@ -182,7 +182,10 @@ mod tests {
         const LOG_N_ROWS: u32 = 8;
 
         // Trace.
-        let (trace, lookup_data) = gen_trace(LOG_N_ROWS);
+        let chunks: Vec<[u32; 16]> = (0..(1 << LOG_N_ROWS))
+            .map(|i| std::array::from_fn(|j| (i * 16 + j) as u32))
+            .collect();
+        let (_log_size, trace, lookup_data) = gen_trace(&chunks);
 
         let relations = Relations::dummy();
         let (interaction_trace, claimed_sum) = gen_interaction_trace(&lookup_data, &relations);

@@ -62,6 +62,7 @@ use crate::{
     components::{gen_interaction_trace, gen_trace},
     preprocessed::PreProcessedTrace,
     relations::Relations,
+    sha256::pad_message,
 };
 
 /// Maximum log_size when `dynamic-preprocessed-shape`.
@@ -89,10 +90,26 @@ pub fn preprocessed_log_size(log_size: u32) -> u32 {
 #[cfg(not(feature = "dynamic-preprocessed-shape"))]
 const TWIDDLES_LOG_SIZE: u32 = 21;
 
+/// Prove SHA-256 hash computation for the given input.
+///
+/// # Arguments
+/// * `input` - The message bytes to hash
+/// * `config` - The PCS configuration for the proof
+///
+/// # Returns
+/// A tuple of (log_size, proof, claimed_sum) where log_size is the computed trace size.
 pub fn prove_sha256(
-    log_size: u32,
+    input: &[u8],
     config: PcsConfig,
-) -> (StarkProof<Blake2sMerkleHasher>, components::ClaimedSum) {
+) -> (u32, StarkProof<Blake2sMerkleHasher>, components::ClaimedSum) {
+    // Pad the input message according to SHA-256 rules
+    let chunks = pad_message(input);
+
+    // Generate trace and get log_size
+    let span = span!(Level::INFO, "Trace").entered();
+    let (log_size, trace, lookup_data) = gen_trace(&chunks);
+    span.exit();
+
     // Precompute twiddles.
     let span = span!(Level::INFO, "Precompute twiddles").entered();
     #[cfg(feature = "dynamic-preprocessed-shape")]
@@ -123,9 +140,8 @@ pub fn prove_sha256(
     span_2.exit();
     span.exit();
 
-    // Trace.
-    let span = span!(Level::INFO, "Trace").entered();
-    let (trace, lookup_data) = gen_trace(log_size);
+    // Commit trace.
+    let span = span!(Level::INFO, "Commit trace").entered();
     let span_1 = span!(Level::INFO, "Extend evals").entered();
     let mut tree_builder = commitment_scheme.tree_builder();
     tree_builder.extend_evals(trace);
@@ -203,14 +219,14 @@ pub fn prove_sha256(
     }
     span.exit();
 
-    (proof.unwrap(), claimed_sum)
+    (log_size, proof.expect("proof should be valid"), claimed_sum)
 }
 
 /// Verify a SHA256 proof.
 ///
 /// # Arguments
 /// * `proof` - The STARK proof to verify
-/// * `log_size` - The log2 of the number of SHA256 instances
+/// * `log_size` - The log2 of the trace size (returned by `prove_sha256`)
 /// * `claimed_sum` - The claimed sums from the prover
 ///
 /// # Returns
@@ -317,64 +333,74 @@ pub fn print_enabled_features() {
 }
 #[cfg(test)]
 mod tests {
-    use std::{env, time::Instant};
-
-    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+    use std::time::Instant;
 
     use super::*;
 
-    /// Print all enabled features
-
     #[test_log::test]
-    fn test_prove_sha256() {
+    fn test_prove_sha256_hello_world() {
         print_enabled_features();
 
-        // Get from environment variable:
-        let log_n_instances = env::var("LOG_N_INSTANCES")
-            .unwrap_or_else(|_| "13".to_string())
-            .parse::<u32>()
-            .unwrap();
-        let n_iter = env::var("N_ITER")
-            .unwrap_or_else(|_| "1".to_string())
-            .parse::<u32>()
-            .unwrap();
-        let log_size = log_n_instances;
-
-        info!("Log size: {}", log_size);
-        info!("Number of iterations: {}", n_iter);
-
-        #[cfg(feature = "peak-alloc")]
-        PEAK_ALLOC.reset_peak_usage();
-        let span = span!(Level::INFO, "Prove").entered();
+        let input = b"hello world";
+        info!("Testing prove with input: {:?}", std::str::from_utf8(input));
 
         let start = Instant::now();
-        (0..n_iter)
-            .into_par_iter()
-            .map(|_| prove_sha256(log_size, PcsConfig::default()))
-            .collect::<Vec<_>>();
-        span.exit();
+        let (log_size, _proof, _claimed_sum) = prove_sha256(input, PcsConfig::default());
         info!(
-            "Throughput {:?}",
-            (1 << log_n_instances) as f32 * n_iter as f32 / start.elapsed().as_secs() as f32
+            "Proof generated in {:?}, log_size={}",
+            start.elapsed(),
+            log_size
         );
-
-        #[cfg(feature = "peak-alloc")]
-        {
-            let peak_bytes = PEAK_ALLOC.peak_usage_as_mb();
-            info!("Peak memory: {} MB", peak_bytes);
-        }
     }
 
     #[test_log::test]
     fn test_prove_verify_roundtrip() {
         print_enabled_features();
 
-        let log_size = 8; // Small size for fast testing
-        info!("Testing prove/verify roundtrip with log_size={}", log_size);
+        let input = b"hello world";
+        info!(
+            "Testing prove/verify roundtrip with input: {:?}",
+            std::str::from_utf8(input)
+        );
 
         // Prove
-        let (proof, claimed_sum) = prove_sha256(log_size, PcsConfig::default());
-        info!("Proof generated successfully");
+        let (log_size, proof, claimed_sum) = prove_sha256(input, PcsConfig::default());
+        info!("Proof generated successfully, log_size={}", log_size);
+
+        // Verify
+        let result = verify_sha256(proof, log_size, &claimed_sum);
+        assert!(result.is_ok(), "Verification failed: {:?}", result.err());
+        info!("Proof verified successfully");
+    }
+
+    #[test_log::test]
+    fn test_prove_verify_empty_input() {
+        print_enabled_features();
+
+        let input = b"";
+        info!("Testing prove/verify with empty input");
+
+        // Prove
+        let (log_size, proof, claimed_sum) = prove_sha256(input, PcsConfig::default());
+        info!("Proof generated successfully, log_size={}", log_size);
+
+        // Verify
+        let result = verify_sha256(proof, log_size, &claimed_sum);
+        assert!(result.is_ok(), "Verification failed: {:?}", result.err());
+        info!("Proof verified successfully");
+    }
+
+    #[test_log::test]
+    fn test_prove_verify_long_input() {
+        print_enabled_features();
+
+        // Create input that requires 2 chunks (100 bytes)
+        let input = [0xab_u8; 100];
+        info!("Testing prove/verify with {} byte input", input.len());
+
+        // Prove
+        let (log_size, proof, claimed_sum) = prove_sha256(&input, PcsConfig::default());
+        info!("Proof generated successfully, log_size={}", log_size);
 
         // Verify
         let result = verify_sha256(proof, log_size, &claimed_sum);
