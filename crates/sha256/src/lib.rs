@@ -16,7 +16,9 @@ pub mod sha256;
 #[cfg(feature = "smalloc")]
 use smalloc::Smalloc;
 pub use stwo::{
-    core::{pcs::PcsConfig, proof::StarkProof, vcs::blake2_merkle::Blake2sMerkleHasher},
+    core::{
+        fri::FriConfig, pcs::PcsConfig, proof::StarkProof, vcs::blake2_merkle::Blake2sMerkleHasher,
+    },
     prover::backend::Column,
 };
 #[cfg(feature = "smalloc")]
