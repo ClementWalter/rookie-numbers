@@ -62,9 +62,7 @@ use crate::{
     relations::Relations,
 };
 
-/// Maximum log_size used for preprocessed column chunking when `dynamic-preprocessed-shape`
-/// feature is disabled. Set to 21 as a chunking threshold; the largest current preprocessed
-/// table is log_size 21, so this keeps non-dynamic mode in a single chunk.
+/// Maximum log_size when `dynamic-preprocessed-shape`.
 pub const MAX_PREPROCESSED_LOG_SIZE: u32 = 21;
 
 /// Returns the effective log_size for preprocessed column chunking.
