@@ -42,6 +42,10 @@ macro_rules! components {
             pub fn sum(&self) -> SecureField {
                 SecureField::zero() $( + self.${concat($module, _, $name)} )+
             }
+
+            pub fn mix_into(&self, channel: &mut impl stwo::core::channel::Channel) {
+                channel.mix_felts(&[$( self.${concat($module, _, $name)} ),+]);
+            }
         }
 
         pub struct Components {

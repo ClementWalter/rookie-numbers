@@ -21,12 +21,13 @@ const N_ITER: &[usize] = &[6, 7, 8];
 fn bench_sha256<const N_ITER: usize>(bencher: divan::Bencher, log_size: u32) {
     print_enabled_features();
 
+    let input = vec![0xab_u8; (1 << log_size) * 512];
     bencher.bench(|| {
         #[cfg(feature = "peak-alloc")]
         PEAK_ALLOC.reset_peak_usage();
         (0..N_ITER)
             .into_par_iter()
-            .map(|_| prove_sha256(log_size, PcsConfig::default()))
+            .map(|_| prove_sha256(&input, PcsConfig::default()))
             .collect::<Vec<_>>();
         #[cfg(feature = "peak-alloc")]
         {

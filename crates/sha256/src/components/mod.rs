@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use stwo::{
     core::{
         air::Component,
-        channel::MerkleChannel,
+        channel::{Channel, MerkleChannel},
         fields::{m31::BaseField, qm31::SecureField},
         pcs::TreeVec,
         ColumnVec,
@@ -42,6 +42,13 @@ pub struct ClaimedSum {
     pub scheduling: SecureField,
     pub compression: SecureField,
     pub preprocessed: preprocessed::ClaimedSum,
+}
+
+impl ClaimedSum {
+    pub fn mix_into(&self, channel: &mut impl Channel) {
+        channel.mix_felts(&[self.scheduling, self.compression]);
+        self.preprocessed.mix_into(channel);
+    }
 }
 
 /// Generate the full trace from input chunks.

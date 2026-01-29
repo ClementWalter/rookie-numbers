@@ -162,6 +162,8 @@ pub fn prove_sha256(
     span_1.exit();
     span.exit();
 
+    claimed_sum.mix_into(channel);
+
     debug!(
         "Columns count: {:?}",
         commitment_scheme
@@ -181,7 +183,6 @@ pub fn prove_sha256(
                 .copied()
                 .max()
                 .unwrap();
-            assert!(max_len <= log_size + 1);
             max_len
         })
     );
@@ -303,6 +304,8 @@ pub fn verify_sha256(
 
     // Commit interaction trace (tree 2)
     commitment_scheme.commit(proof.commitments[2], &interaction_sizes, channel);
+
+    claimed_sum.mix_into(channel);
 
     // Get all components for verification
     let component_refs: Vec<&dyn stwo::core::air::Component> = components.components();
