@@ -620,4 +620,48 @@ mod tests {
         assert!(result.is_ok(), "Verification failed: {:?}", result.err());
         info!("Proof verified successfully");
     }
+
+    #[test]
+    fn test_n_constraints() {
+        use stwo::core::fields::qm31::SecureField;
+        use stwo_constraint_framework::TraceLocationAllocator;
+
+        let log_size = TEST_PREPROCESS_LOG_SIZE;
+        let dummy_relations = relations::Relations::dummy();
+        let dummy_claimed_sum = components::ClaimedSum {
+            scheduling: SecureField::zero(),
+            compression: SecureField::zero(),
+            preprocessed: components::preprocessed::ClaimedSum {
+                sigma_0_i0_i1: SecureField::zero(),
+                sigma_1_i0_i1: SecureField::zero(),
+                sigma_0_o2: SecureField::zero(),
+                sigma_1_o2: SecureField::zero(),
+                big_sigma_0_i0_i1: SecureField::zero(),
+                big_sigma_0_o2: SecureField::zero(),
+                big_sigma_1_i0: SecureField::zero(),
+                big_sigma_1_i1: SecureField::zero(),
+                big_sigma_1_o2: SecureField::zero(),
+                ch_left_i0: SecureField::zero(),
+                ch_left_i1: SecureField::zero(),
+                ch_right_i0: SecureField::zero(),
+                ch_right_i1: SecureField::zero(),
+                maj_i0h0_i1l0: SecureField::zero(),
+                maj_i0h1_i1l1: SecureField::zero(),
+                maj_i0l_i1h: SecureField::zero(),
+                range_check_add_range_check_add: SecureField::zero(),
+            },
+        };
+        let mut location_allocator = TraceLocationAllocator::default();
+        let components = components::Components::new(
+            log_size,
+            &mut location_allocator,
+            &dummy_relations,
+            &dummy_claimed_sum,
+        );
+        let n_constraints = components.n_constraints();
+
+        // Verify n_constraints returns a positive value
+        assert!(n_constraints > 0, "n_constraints should be positive");
+        info!("Total n_constraints: {}", n_constraints);
+    }
 }

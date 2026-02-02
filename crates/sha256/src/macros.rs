@@ -161,6 +161,10 @@ macro_rules! components {
                     $( self.${concat($module, _, $name)}.trace_log_degree_bounds(), )+
                 ]
             }
+
+            pub fn n_constraints(&self) -> usize {
+                0 $( + self.${concat($module, _, $name)}.n_constraints() )+
+            }
         }
     };
 }

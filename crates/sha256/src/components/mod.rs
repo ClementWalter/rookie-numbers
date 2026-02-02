@@ -226,4 +226,10 @@ impl Components {
         log_degree_bounds.extend(self.preprocessed.trace_log_degree_bounds());
         log_degree_bounds
     }
+
+    pub fn n_constraints(&self) -> usize {
+        self.scheduling.n_constraints()
+            + self.compression.n_constraints()
+            + self.preprocessed.n_constraints()
+    }
 }
