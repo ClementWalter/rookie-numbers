@@ -13,8 +13,10 @@ use std::{fs, path::PathBuf};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use sha256::{components::ClaimedSum, prove_sha256, verify_sha256};
-use stwo::{core::pcs::PcsConfig, prover::backend::Column};
+use sha256::{
+    components::ClaimedSum, preprocess_sha256, prove_sha256, verify_sha256, PreprocessedData,
+};
+use stwo::core::pcs::PcsConfig;
 use tracing::info;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -73,6 +75,8 @@ struct BenchmarkState {
     log_size: u32,
     /// Original input size
     input_size: u64,
+    /// Path to the serialized preprocessed data
+    preprocessed_path: Option<PathBuf>,
     /// Path to the serialized proof
     proof_path: Option<PathBuf>,
     /// Claimed sums from the prover (needed for verification)
@@ -117,6 +121,7 @@ fn main() -> Result<()> {
 /// Prepare prover state for a given input size.
 ///
 /// Converts INPUT_SIZE to log_size: log_size = ceil(log2(INPUT_SIZE))
+/// Then generates and saves the preprocessed data.
 fn cmd_prepare(input_size: u64, state_json: PathBuf) -> Result<()> {
     info!("Preparing state for input_size={}", input_size);
 
@@ -133,9 +138,29 @@ fn cmd_prepare(input_size: u64, state_json: PathBuf) -> Result<()> {
 
     info!("Computed log_size={}", log_size);
 
+    // Generate preprocessed data
+    sha256::print_enabled_features();
+    let config = PcsConfig::default();
+    info!("Generating preprocessed data...");
+    let preprocessed = preprocess_sha256(log_size, config);
+
+    // Serialize and save preprocessed data
+    let preprocessed_path = state_json.with_extension("preprocessed.bin");
+    let preprocessed_bytes =
+        bincode::serialize(&preprocessed).context("Failed to serialize preprocessed data")?;
+    fs::write(&preprocessed_path, &preprocessed_bytes)
+        .context("Failed to write preprocessed data")?;
+
+    info!(
+        "Preprocessed data written to {:?} ({} bytes)",
+        preprocessed_path,
+        preprocessed_bytes.len()
+    );
+
     let state = BenchmarkState {
         log_size,
         input_size,
+        preprocessed_path: Some(preprocessed_path),
         proof_path: None,
         claimed_sum: None,
     };
@@ -158,6 +183,17 @@ fn cmd_prove(state_json: PathBuf) -> Result<()> {
 
     info!("Proving with target log_size={}", state.log_size);
 
+    // Load preprocessed data
+    let preprocessed_path = state
+        .preprocessed_path
+        .as_ref()
+        .context("No preprocessed path in state - run prepare first")?;
+    info!("Loading preprocessed data from {:?}", preprocessed_path);
+    let preprocessed_bytes =
+        fs::read(preprocessed_path).context("Failed to read preprocessed data")?;
+    let preprocessed: PreprocessedData =
+        bincode::deserialize(&preprocessed_bytes).context("Failed to deserialize preprocessed")?;
+
     // Generate synthetic input bytes that will produce the required number of chunks
     // Each chunk is 64 bytes, and we need 2^log_size chunks
     // However, padding adds 1 byte (0x80) + padding + 8 bytes (length)
@@ -168,9 +204,10 @@ fn cmd_prove(state_json: PathBuf) -> Result<()> {
     let input_len = n_chunks * 64 - 9;
     let input = vec![0xab_u8; input_len];
 
-    // Generate proof
+    // Generate proof using preprocessed data
     sha256::print_enabled_features();
-    let (proof, actual_log_size, claimed_sum) = prove_sha256(&input, PcsConfig::default());
+    let config = PcsConfig::default();
+    let (proof, actual_log_size, claimed_sum) = prove_sha256(&input, config, &preprocessed);
     state.log_size = actual_log_size; // Update with actual log_size
 
     // Serialize proof
@@ -237,15 +274,18 @@ fn cmd_measure(state_json: PathBuf, sizes_json: PathBuf) -> Result<()> {
     let proof_path = state
         .proof_path
         .context("No proof path in state - run prove first")?;
+    let preprocessed_path = state
+        .preprocessed_path
+        .context("No preprocessed path in state - run prepare first")?;
 
     // Get proof size
     let proof_metadata = fs::metadata(&proof_path).context("Failed to get proof metadata")?;
     let proof_size = proof_metadata.len();
 
-    // Compute preprocessing size
-    // The preprocessing consists of the preprocessed trace columns
-    // For now, estimate based on log_size
-    let preprocessing_size = estimate_preprocessing_size(state.log_size);
+    // Get preprocessing size from actual file
+    let preprocessed_metadata =
+        fs::metadata(&preprocessed_path).context("Failed to get preprocessed metadata")?;
+    let preprocessing_size = preprocessed_metadata.len();
 
     info!("Proof size: {} bytes", proof_size);
     info!("Preprocessing size: {} bytes", preprocessing_size);
@@ -261,26 +301,4 @@ fn cmd_measure(state_json: PathBuf, sizes_json: PathBuf) -> Result<()> {
 
     info!("Sizes written to {:?}", sizes_json);
     Ok(())
-}
-
-/// Estimate the preprocessing size based on log_size.
-///
-/// The preprocessing consists of static lookup tables for SHA256 operations.
-/// This is an approximation based on the number and size of preprocessed columns.
-fn estimate_preprocessing_size(log_size: u32) -> u64 {
-    use sha256::preprocessed::PreProcessedTrace;
-
-    // Generate the preprocessed trace to count columns and sizes
-    let preprocessed = PreProcessedTrace::new(log_size);
-
-    // Each column is a CircleEvaluation with domain size 2^log_size
-    // Each element is a BaseField (4 bytes = 32 bits for M31)
-    let total_elements: u64 = preprocessed
-        .trace
-        .iter()
-        .map(|eval| eval.values.len() as u64)
-        .sum();
-
-    // Each BaseField is 4 bytes
-    total_elements * 4
 }
