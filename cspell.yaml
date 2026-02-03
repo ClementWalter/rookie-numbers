@@ -19,6 +19,7 @@ words:
   - metavar
   - mimalloc
   - mult
+  - nocapture
   - oods
   - papini
   - pext
@@ -29,6 +30,7 @@ words:
   - rustup
   - serde
   - shahar
+  - smmalloc
   - stwo
   - thiserror
   - tikv

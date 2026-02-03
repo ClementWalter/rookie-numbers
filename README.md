@@ -77,7 +77,7 @@ Some results can also be found in
 To run a single test:
 
 ```bash
-LOG_N_INSTANCES=17 N_ITER=3 RUSTFLAGS="-C target-cpu=native" cargo t -r test_prove_sha256
+RUST_LOG=sha256::tests=info,stwo=off RUST_LOG_SPAN_EVENTS=close LOG_N_INSTANCES=13 N_ITER=3 RUSTFLAGS="-C target-cpu=native" cargo t -r --package sha256 --lib -- tests::test_prove_verify_long_input --exact --nocapture
 ```
 
 Depending on your machine (especially the number of cores and available memory),
@@ -85,7 +85,7 @@ you may find OOM errors. It is a good idea to start low instance count and one
 single thread:
 
 ```bash
-LOG_N_INSTANCES=13 N_ITER=1 RUSTFLAGS="-C target-cpu=native" cargo t -r test_prove_sha256
+RUST_LOG=sha256::tests=info,stwo=off RUST_LOG_SPAN_EVENTS=close LOG_N_INSTANCES=13 N_ITER=1 RUSTFLAGS="-C target-cpu=native" cargo t -r --package sha256 --lib -- tests::test_prove_verify_long_input --exact --nocapture
 ```
 
 to check memory usage and performance, and then increase the number of
@@ -93,7 +93,7 @@ iterations and log size. Best results should be obtained with `N_ITER` set to
 the actual number of cores on your machine. For example, on macOs
 
 ```bash
-LOG_N_INSTANCES=13 N_ITER=$(sysctl -n hw.logicalcpu) RUSTFLAGS="-C target-cpu=native" cargo t -r test_prove_sha256
+RUST_LOG=sha256::tests=info,stwo=off RUST_LOG_SPAN_EVENTS=close LOG_N_INSTANCES=13 N_ITER=$(sysctl -n hw.logicalcpu) RUSTFLAGS="-C target-cpu=native" cargo t -r --package sha256 --lib -- tests::test_prove_verify_long_input --exact --nocapture
 ```
 
 The global allocator can be changed by using the `peak-alloc` or `jemalloc`

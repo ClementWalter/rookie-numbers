@@ -523,6 +523,8 @@ pub fn print_enabled_features() {
 mod tests {
     use std::time::Instant;
 
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
     use super::*;
 
     /// Default log_size for preprocessing in tests.
@@ -603,22 +605,42 @@ mod tests {
         print_enabled_features();
 
         // Create input that requires 2 chunks (100 bytes)
-        let input = [0xab_u8; 100];
+        let log_n_instances: u32 = std::env::var("LOG_N_INSTANCES")
+            .map(|s| s.parse().expect("LOG_N_INSTANCES must be a valid u32"))
+            .unwrap_or(7); // Default to 2^7 = 128 bytes
+        let input = vec![0xab_u8; (1 << log_n_instances) * 64];
         info!("Testing prove/verify with {} byte input", input.len());
 
         let config = PcsConfig::default();
 
         // Preprocess
-        let preprocessed = preprocess_sha256(TEST_PREPROCESS_LOG_SIZE, config);
+        let span = span!(Level::INFO, "Preprocess").entered();
+        let preprocessed = preprocess_sha256(log_n_instances, config);
+        span.exit();
 
         // Prove
-        let (proof, log_size, claimed_sum) = prove_sha256(&input, config, &preprocessed);
-        info!("Proof generated successfully, log_size={}", log_size);
+        let n_iter: usize = std::env::var("N_ITER")
+            .map(|s| s.parse().expect("N_ITER must be a valid usize"))
+            .unwrap_or(1);
+        info!("Proving {} instances in parallel", n_iter);
+        let span = span!(Level::INFO, "Prove and Verify", n_iter = n_iter).entered();
+        (0..n_iter)
+            .into_par_iter()
+            .map(|i| {
+                let prove_span = span!(Level::INFO, "Prove", iteration = i).entered();
+                let (proof, log_size, claimed_sum) = prove_sha256(&input, config, &preprocessed);
+                info!("Proof generated successfully, log_size={}", log_size);
+                prove_span.exit();
 
-        // Verify
-        let result = verify_sha256(proof, log_size, &claimed_sum);
-        assert!(result.is_ok(), "Verification failed: {:?}", result.err());
-        info!("Proof verified successfully");
+                // Verify
+                let verify_span = span!(Level::INFO, "Verify", iteration = i).entered();
+                let result = verify_sha256(proof, log_size, &claimed_sum);
+                assert!(result.is_ok(), "Verification failed: {:?}", result.err());
+                info!("Proof verified successfully");
+                verify_span.exit();
+            })
+            .collect::<Vec<_>>();
+        span.exit();
     }
 
     #[test]
